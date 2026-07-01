@@ -13,17 +13,27 @@ export default function RegisterPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  const [needsConfirm, setNeedsConfirm] = useState(false)
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName } },
     })
-    if (error) { setError(error.message); setLoading(false) }
-    else router.push('/dashboard')
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+    } else if (data.user && !data.session) {
+      // Email confirmation required
+      setNeedsConfirm(true)
+      setLoading(false)
+    } else {
+      router.push('/dashboard')
+    }
   }
 
   return (
@@ -35,6 +45,16 @@ export default function RegisterPage() {
           <p className="text-gray-500 text-sm mt-1">צרי חשבון חדש</p>
         </div>
 
+        {needsConfirm ? (
+          <div className="text-center py-4">
+            <div className="text-4xl mb-3">📬</div>
+            <h2 className="font-semibold text-gray-800 mb-2">בדקי את האימייל שלך</h2>
+            <p className="text-gray-500 text-sm">שלחנו קישור אישור ל-<strong>{email}</strong>. לחצי עליו ואז חזרי להתחבר.</p>
+            <a href="/auth/login" className="mt-4 inline-block text-blue-600 hover:underline font-medium text-sm">
+              חזרי להתחברות →
+            </a>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">שם מלא</label>
@@ -80,6 +100,7 @@ export default function RegisterPage() {
           </button>
         </form>
 
+        )}
         <p className="text-center text-sm text-gray-500 mt-6">
           יש לך חשבון?{' '}
           <Link href="/auth/login" className="text-blue-600 hover:underline font-medium">

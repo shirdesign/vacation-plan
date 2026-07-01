@@ -17,8 +17,17 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) { setError(error.message); setLoading(false) }
-    else router.push('/dashboard')
+    if (error) {
+      const msg = error.message.includes('Email not confirmed')
+        ? 'האימייל עדיין לא אושר. בדקי את תיבת הדואר שלך.'
+        : error.message.includes('Invalid login')
+        ? 'אימייל או סיסמה שגויים'
+        : error.message
+      setError(msg)
+      setLoading(false)
+    } else {
+      router.push('/dashboard')
+    }
   }
 
   return (
