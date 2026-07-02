@@ -3,6 +3,13 @@ import { notFound } from 'next/navigation'
 import { Trip, TripDay, DayEvent, Expense } from '@/lib/types'
 import { format, parseISO, differenceInDays, eachDayOfInterval } from 'date-fns'
 import { he } from 'date-fns/locale'
+import JumpToToday from '@/components/share/JumpToToday'
+import type { TripTip } from '@/lib/types'
+
+const TIP_EMOJI: Record<string, string> = {
+  general: '💡', food: '🍽️', kosher: '🔯', transport: '🚌',
+  hotel: '🏨', chabad: '🕍', nails: '💅', shopping: '🛍️',
+}
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
@@ -16,6 +23,8 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   const t = shared.trip as Trip
   const days = shared.days as (TripDay & { day_events: DayEvent[] })[]
   const expenses = shared.expenses as Expense[]
+  const tips = (shared.tips || []) as TripTip[]
+  const tipLocations = [...new Set(tips.map(tip => tip.location))]
 
   const totalSpent = (expenses || []).reduce((s: number, e: Expense) => s + Number(e.amount), 0)
   const daysMap = new Map((days || []).map((d: TripDay) => [d.date, d]))
@@ -73,7 +82,8 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
               return (
                 <div
                   key={dateStr}
-                  className={`rounded-2xl shadow-sm p-5 ${isShabbat ? 'bg-blue-50 border border-blue-200' : 'bg-white'} ${isToday ? 'ring-2 ring-blue-400' : ''}`}
+                  id={`day-${dateStr}`}
+                  className={`rounded-2xl shadow-sm p-5 scroll-mt-4 ${isShabbat ? 'bg-blue-50 border border-blue-200' : 'bg-white'} ${isToday ? 'ring-2 ring-blue-400' : ''}`}
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${isToday ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
@@ -123,6 +133,30 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
             })}
           </div>
         )}
+
+        {/* Tips & recommendations */}
+        {tips.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm p-5 mt-5">
+            <h2 className="font-semibold text-gray-700 mb-3">🗺️ טיפים והמלצות</h2>
+            <div className="space-y-4">
+              {tipLocations.map(loc => (
+                <div key={loc}>
+                  <div className="text-xs font-semibold text-gray-500 mb-1.5">📍 {loc}</div>
+                  <div className="space-y-1 pr-2">
+                    {tips.filter(tip => tip.location === loc).map(tip => (
+                      <div key={tip.id} className="text-sm text-gray-700 flex items-start gap-2">
+                        <span>{TIP_EMOJI[tip.category] || '💡'}</span>
+                        <span>{tip.tip}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <JumpToToday startDate={t.start_date} endDate={t.end_date} />
 
         <p className="text-center text-xs text-gray-400 mt-8">
           נוצר עם TripTrack ✈️

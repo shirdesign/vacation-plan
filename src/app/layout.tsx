@@ -7,6 +7,12 @@ const rubik = Rubik({ subsets: ['hebrew', 'latin'] })
 export const metadata: Metadata = {
   title: 'TripTrack — מעקב טיול משפחתי',
   description: 'תכנון מסלול, מעקב תקציב ושיתוף עם המשפחה',
+  appleWebApp: { capable: true, title: 'TripTrack', statusBarStyle: 'default' },
+  icons: { apple: '/apple-touch-icon.png' },
+}
+
+export const viewport = {
+  themeColor: '#2563eb',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

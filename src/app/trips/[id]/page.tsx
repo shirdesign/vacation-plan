@@ -8,6 +8,7 @@ import ShareButton from '@/components/trips/ShareButton'
 import ChecklistSection from '@/components/trips/ChecklistSection'
 import TipsSection from '@/components/trips/TipsSection'
 import EmergencyContactsSection from '@/components/trips/EmergencyContactsSection'
+import PlanTripButton from '@/components/trips/PlanTripButton'
 
 export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -107,6 +108,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             <p className="text-gray-600 text-sm whitespace-pre-wrap">{t.description}</p>
           </div>
         )}
+
+        {/* AI Trip Planner */}
+        <PlanTripButton tripId={id} />
 
         {/* Pre-trip Checklist */}
         <ChecklistSection tripId={id} initialItems={checklist || []} />
