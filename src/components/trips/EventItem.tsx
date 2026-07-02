@@ -39,7 +39,7 @@ export default function EventItem({
           {event.title}
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-          {event.start_time && <span>⏰ {event.start_time}{event.end_time ? ` – ${event.end_time}` : ''}</span>}
+          {event.start_time && <span>⏰ {event.start_time.slice(0, 5)}{event.end_time ? ` – ${event.end_time.slice(0, 5)}` : ''}</span>}
           {event.location && <span>📍 {event.location}</span>}
         </div>
         {event.description && (

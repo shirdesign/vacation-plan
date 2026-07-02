@@ -2,28 +2,20 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Trip, TripDay, DayEvent, Expense } from '@/lib/types'
 import { format, parseISO, differenceInDays, eachDayOfInterval } from 'date-fns'
+import { he } from 'date-fns/locale'
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const supabase = await createClient()
 
-  // Find trip by share token (no auth needed)
-  const { data: trip } = await supabase
-    .from('trips')
-    .select('*')
-    .eq('share_token', token)
-    .single()
+  // Find trip by share token via SECURITY DEFINER RPC (no auth needed, RLS-safe)
+  const { data: shared } = await supabase.rpc('get_shared_trip', { token })
 
-  if (!trip) notFound()
+  if (!shared?.trip) notFound()
 
-  const t = trip as Trip
-
-  const [{ data: days }, { data: expenses }] = await Promise.all([
-    supabase.from('trip_days').select('*, day_events(*)').eq('trip_id', t.id).order('date'),
-    t.share_show_budget
-      ? supabase.from('expenses').select('*, budget_categories(name, icon)').eq('trip_id', t.id)
-      : Promise.resolve({ data: [] }),
-  ])
+  const t = shared.trip as Trip
+  const days = shared.days as (TripDay & { day_events: DayEvent[] })[]
+  const expenses = shared.expenses as Expense[]
 
   const totalSpent = (expenses || []).reduce((s: number, e: Expense) => s + Number(e.amount), 0)
   const daysMap = new Map((days || []).map((d: TripDay) => [d.date, d]))
@@ -76,11 +68,12 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
               const day = daysMap.get(dateStr) as (TripDay & { day_events?: DayEvent[] }) | undefined
               const events = day?.day_events || []
               const isToday = dateStr === format(new Date(), 'yyyy-MM-dd')
+              const isShabbat = date.getDay() === 6
 
               return (
                 <div
                   key={dateStr}
-                  className={`bg-white rounded-2xl shadow-sm p-5 ${isToday ? 'ring-2 ring-blue-400' : ''}`}
+                  className={`rounded-2xl shadow-sm p-5 ${isShabbat ? 'bg-blue-50 border border-blue-200' : 'bg-white'} ${isToday ? 'ring-2 ring-blue-400' : ''}`}
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${isToday ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
@@ -88,14 +81,22 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                     </div>
                     <div>
                       <div className="font-semibold text-gray-800 text-sm">
-                        {format(date, 'EEEE')} · {format(date, 'dd/MM/yyyy')}
+                        {format(date, 'EEEE', { locale: he })} · {format(date, 'dd/MM/yyyy')}
+                        {isShabbat && <span className="mr-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">✡️ שבת</span>}
                         {isToday && <span className="mr-2 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">היום</span>}
                       </div>
+                      {day?.title && (
+                        <div className="text-xs font-medium text-gray-600">{day.title}</div>
+                      )}
                       {day?.location_name && (
                         <div className="text-xs text-gray-500">📍 {day.location_name}</div>
                       )}
                     </div>
                   </div>
+
+                  {day?.notes && (
+                    <p className="text-xs text-gray-500 whitespace-pre-wrap mr-11 mb-2">📝 {day.notes}</p>
+                  )}
 
                   {events.length > 0 ? (
                     <div className="space-y-1.5 mr-11">
@@ -108,7 +109,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                               : <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0 mt-1" />
                             }
                             <span className="text-gray-700">{event.title}</span>
-                            {event.start_time && <span className="text-gray-400 text-xs">{event.start_time}</span>}
+                            {event.start_time && <span className="text-gray-400 text-xs">{event.start_time.slice(0, 5)}</span>}
                           </div>
                         ))}
                     </div>
