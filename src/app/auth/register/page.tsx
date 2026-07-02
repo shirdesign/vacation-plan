@@ -19,20 +19,25 @@ export default function RegisterPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } },
-    })
-    if (error) {
-      setError(error.message || error.code || JSON.stringify(error))
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName } },
+      })
+      if (error) {
+        setError(error.message || error.name || `שגיאה (${error.status})`)
+        setLoading(false)
+      } else if (!data.session) {
+        setNeedsConfirm(true)
+        setLoading(false)
+      } else {
+        router.push('/dashboard')
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(`שגיאת רשת: ${msg}`)
       setLoading(false)
-    } else if (data.user && !data.session) {
-      // Email confirmation required
-      setNeedsConfirm(true)
-      setLoading(false)
-    } else {
-      router.push('/dashboard')
     }
   }
 
