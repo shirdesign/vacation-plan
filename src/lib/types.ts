@@ -48,6 +48,35 @@ export type BudgetCategory = {
   sort_order: number
 }
 
+export type ChecklistItem = {
+  id: string
+  trip_id: string
+  text: string
+  is_done: boolean
+  sort_order: number
+  created_at: string
+}
+
+export type EmergencyContact = {
+  id: string
+  trip_id: string
+  name: string
+  role?: string
+  phone?: string
+  notes?: string
+  sort_order: number
+}
+
+export type TripTip = {
+  id: string
+  trip_id: string
+  location: string
+  category: string
+  tip: string
+  source?: string
+  sort_order: number
+}
+
 export type Expense = {
   id: string
   trip_id: string

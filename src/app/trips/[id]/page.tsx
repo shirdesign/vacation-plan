@@ -5,6 +5,9 @@ import NavBar from '@/components/ui/NavBar'
 import { Trip } from '@/lib/types'
 import { format, parseISO, differenceInDays } from 'date-fns'
 import ShareButton from '@/components/trips/ShareButton'
+import ChecklistSection from '@/components/trips/ChecklistSection'
+import TipsSection from '@/components/trips/TipsSection'
+import EmergencyContactsSection from '@/components/trips/EmergencyContactsSection'
 
 export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -25,10 +28,12 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const days = differenceInDays(parseISO(t.end_date), parseISO(t.start_date)) + 1
 
   // Get total spent
-  const { data: expenses } = await supabase
-    .from('expenses')
-    .select('amount')
-    .eq('trip_id', id)
+  const [{ data: expenses }, { data: checklist }, { data: tips }, { data: contacts }] = await Promise.all([
+    supabase.from('expenses').select('amount').eq('trip_id', id),
+    supabase.from('trip_checklists').select('*').eq('trip_id', id).order('sort_order'),
+    supabase.from('trip_tips').select('*').eq('trip_id', id).order('location').order('sort_order'),
+    supabase.from('trip_emergency_contacts').select('*').eq('trip_id', id).order('sort_order'),
+  ])
 
   const totalSpent = expenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0
   const remaining = t.total_budget - totalSpent
@@ -97,11 +102,20 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         </div>
 
         {t.description && (
-          <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
             <h2 className="font-semibold text-gray-700 mb-2">הערות כלליות</h2>
             <p className="text-gray-600 text-sm whitespace-pre-wrap">{t.description}</p>
           </div>
         )}
+
+        {/* Pre-trip Checklist */}
+        <ChecklistSection tripId={id} initialItems={checklist || []} />
+
+        {/* Tips & Recommendations */}
+        <TipsSection tripId={id} initialTips={tips || []} />
+
+        {/* Emergency Contacts */}
+        <EmergencyContactsSection tripId={id} initialContacts={contacts || []} />
       </main>
     </div>
   )

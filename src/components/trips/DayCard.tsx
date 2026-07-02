@@ -30,9 +30,11 @@ export default function DayCard({ day, dayNumber, tripId, onUpsertDay, onUpdate 
   const [events, setEvents] = useState<DayEvent[]>(day.day_events || [])
   const supabase = createClient()
 
-  const dateLabel = format(parseISO(day.date), 'EEEE dd/MM')
   const hebrewDay = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת']
   const dow = parseISO(day.date).getDay()
+  const isShabbat = dow === 6 // Saturday
+  const isFriday = dow === 5
+  const isErevShabbat = isFriday
 
   async function saveLocation() {
     const updated = await onUpsertDay(day.date, { location_name: locationName })
@@ -79,20 +81,25 @@ export default function DayCard({ day, dayNumber, tripId, onUpsertDay, onUpdate 
 
   const doneCount = events.filter(e => e.status === 'done').length
 
+  const cardBg = isShabbat ? 'bg-blue-50 border-blue-200' : isErevShabbat ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'
+  const numBg = isShabbat ? 'bg-blue-700' : isErevShabbat ? 'bg-amber-500' : 'bg-blue-600'
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+    <div className={`rounded-2xl border overflow-hidden ${cardBg}`}>
       {/* Day header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition text-right"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-black/5 transition text-right"
       >
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">
+          <div className={`w-9 h-9 rounded-full text-white text-sm font-bold flex items-center justify-center flex-shrink-0 ${numBg}`}>
             {dayNumber}
           </div>
           <div>
-            <div className="font-semibold text-gray-800">
+            <div className="font-semibold text-gray-800 flex items-center gap-2">
               יום {hebrewDay[dow]} · {format(parseISO(day.date), 'dd/MM/yyyy')}
+              {isShabbat && <span className="text-xs bg-blue-700 text-white px-2 py-0.5 rounded-full">✡️ שבת</span>}
+              {isErevShabbat && <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">🕯️ ערב שבת</span>}
             </div>
             {day.location_name && (
               <div className="text-sm text-gray-500">📍 {day.location_name}</div>
