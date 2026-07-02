@@ -30,15 +30,36 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
   // Get total spent
   const [{ data: expenses }, { data: checklist }, { data: tips }, { data: contacts }] = await Promise.all([
-    supabase.from('expenses').select('amount').eq('trip_id', id),
+    supabase.from('expenses').select('amount, date, budget_categories(is_fixed)').eq('trip_id', id),
     supabase.from('trip_checklists').select('*').eq('trip_id', id).order('sort_order'),
     supabase.from('trip_tips').select('*').eq('trip_id', id).order('location').order('sort_order'),
     supabase.from('trip_emergency_contacts').select('*').eq('trip_id', id).order('sort_order'),
   ])
 
-  const totalSpent = expenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0
+  type ExpenseRow = { amount: number; date: string; budget_categories: { is_fixed: boolean } | null }
+  const expRows = (expenses || []) as unknown as ExpenseRow[]
+  const totalSpent = expRows.reduce((sum, e) => sum + Number(e.amount), 0)
+  const fixedSpent = expRows.filter(e => e.budget_categories?.is_fixed).reduce((s, e) => s + Number(e.amount), 0)
+  const dailySpent = totalSpent - fixedSpent
   const remaining = t.total_budget - totalSpent
   const spentPct = t.total_budget > 0 ? Math.min((totalSpent / t.total_budget) * 100, 100) : 0
+
+  // Daily budget math
+  const today = new Date()
+  const todayStr = format(today, 'yyyy-MM-dd')
+  const tripStarted = todayStr >= t.start_date
+  const tripEnded = todayStr > t.end_date
+  // Days left including today (before the trip: all days)
+  const daysLeft = tripEnded ? 0 : tripStarted
+    ? differenceInDays(parseISO(t.end_date), today) + 1
+    : days
+  const perDayLeft = daysLeft > 0 ? remaining / daysLeft : 0
+  // Days elapsed including today
+  const daysElapsed = tripStarted
+    ? Math.min(differenceInDays(today, parseISO(t.start_date)) + 1, days)
+    : 0
+  const avgDailyAll = daysElapsed > 0 ? totalSpent / daysElapsed : 0
+  const avgDailyOnly = daysElapsed > 0 ? dailySpent / daysElapsed : 0
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -83,6 +104,34 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               />
             </div>
             <p className="text-xs text-gray-400 mt-1 text-left">{spentPct.toFixed(0)}% מהתקציב</p>
+
+            {/* Daily budget breakdown */}
+            <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div className="bg-blue-50 rounded-xl p-3 text-center">
+                <div className="font-bold text-blue-700 text-lg">
+                  {daysLeft > 0 ? Math.floor(perDayLeft).toLocaleString() : '—'} {daysLeft > 0 && t.currency}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  נשאר ליום · {daysLeft > 0 ? `${daysLeft} ימים ${tripStarted ? 'נותרו' : 'בטיול'}` : 'הטיול הסתיים'}
+                </div>
+              </div>
+              <div className="bg-orange-50 rounded-xl p-3 text-center">
+                <div className="font-bold text-orange-600 text-lg">
+                  {daysElapsed > 0 ? Math.round(avgDailyOnly).toLocaleString() + ' ' + t.currency : '—'}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {daysElapsed > 0 ? `ממוצע ליום · בלי טיסות וביטוח` : 'ממוצע יומי — הטיול טרם התחיל'}
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 text-center">
+                <div className="font-bold text-gray-700 text-lg">
+                  {daysElapsed > 0 ? Math.round(avgDailyAll).toLocaleString() + ' ' + t.currency : '—'}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {daysElapsed > 0 ? `ממוצע ליום · כולל הכל (${daysElapsed} ימים)` : 'ממוצע כולל — הטיול טרם התחיל'}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

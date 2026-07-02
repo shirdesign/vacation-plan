@@ -24,6 +24,8 @@ export default function DayCard({ day, dayNumber, tripId, onUpsertDay, onUpdate 
   const [expanded, setExpanded] = useState(false)
   const [editingLocation, setEditingLocation] = useState(false)
   const [locationName, setLocationName] = useState(day.location_name || '')
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [title, setTitle] = useState(day.title || '')
   const [editingNotes, setEditingNotes] = useState(false)
   const [notes, setNotes] = useState(day.notes || '')
   const [showAddEvent, setShowAddEvent] = useState(false)
@@ -35,6 +37,12 @@ export default function DayCard({ day, dayNumber, tripId, onUpsertDay, onUpdate 
   const isShabbat = dow === 6 // Saturday
   const isFriday = dow === 5
   const isErevShabbat = isFriday
+
+  async function saveTitle() {
+    const updated = await onUpsertDay(day.date, { title })
+    onUpdate({ title, id: updated.id })
+    setEditingTitle(false)
+  }
 
   async function saveLocation() {
     const updated = await onUpsertDay(day.date, { location_name: locationName })
@@ -101,6 +109,9 @@ export default function DayCard({ day, dayNumber, tripId, onUpsertDay, onUpdate 
               {isShabbat && <span className="text-xs bg-blue-700 text-white px-2 py-0.5 rounded-full">✡️ שבת</span>}
               {isErevShabbat && <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">🕯️ ערב שבת</span>}
             </div>
+            {(title || day.title) && (
+              <div className="text-sm font-medium text-gray-600">{title || day.title}</div>
+            )}
             {day.location_name && (
               <div className="text-sm text-gray-500">📍 {day.location_name}</div>
             )}
@@ -116,6 +127,36 @@ export default function DayCard({ day, dayNumber, tripId, onUpsertDay, onUpdate 
 
       {expanded && (
         <div className="border-t border-gray-100 px-5 py-4 space-y-4">
+          {/* Title */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium text-gray-600">🏷️ כותרת היום</span>
+              {!editingTitle && (
+                <button onClick={() => setEditingTitle(true)} className="text-xs text-blue-500 hover:underline">
+                  {title || day.title ? 'ערכי' : 'הוסיפי'}
+                </button>
+              )}
+            </div>
+            {editingTitle ? (
+              <div className="flex gap-2">
+                <input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder='למשל: "יום שווקים וטיול בעיר העתיקה"'
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={e => e.key === 'Enter' && saveTitle()}
+                  autoFocus
+                />
+                <button onClick={saveTitle} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm">שמור</button>
+                <button onClick={() => setEditingTitle(false)} className="text-gray-500 px-2 text-sm">ביטול</button>
+              </div>
+            ) : (
+              (title || day.title)
+                ? <p className="text-sm text-gray-700">{title || day.title}</p>
+                : <p className="text-sm text-gray-400 italic">אין כותרת</p>
+            )}
+          </div>
+
           {/* Location */}
           <div>
             <div className="flex items-center justify-between mb-1">
