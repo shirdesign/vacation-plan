@@ -25,7 +25,7 @@ export default function RegisterPage() {
       options: { data: { full_name: fullName } },
     })
     if (error) {
-      setError(error.message)
+      setError(error.message || error.code || JSON.stringify(error))
       setLoading(false)
     } else if (data.user && !data.session) {
       // Email confirmation required
