@@ -18,9 +18,34 @@ export default function TipsSection({ tripId, initialTips }: { tripId: string; i
   const [tips, setTips] = useState<TripTip[]>(initialTips)
   const [open, setOpen] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [filter, setFilter] = useState<string | null>(null)
   const [form, setForm] = useState({ location: '', category: 'general', tip: '', source: '' })
   const supabase = createClient()
+
+  function startEdit(tip: TripTip) {
+    setEditingId(tip.id)
+    setForm({ location: tip.location, category: tip.category, tip: tip.tip, source: tip.source || '' })
+    setShowForm(true)
+  }
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setForm({ location: '', category: 'general', tip: '', source: '' })
+  }
+
+  async function saveEdit() {
+    if (!editingId || !form.location.trim() || !form.tip.trim()) return
+    const { data } = await supabase
+      .from('trip_tips')
+      .update({ location: form.location.trim(), category: form.category, tip: form.tip.trim(), source: form.source || null })
+      .eq('id', editingId)
+      .select()
+      .single()
+    if (data) setTips(prev => prev.map(t => t.id === editingId ? data : t))
+    closeForm()
+  }
 
   const locations = [...new Set(tips.map(t => t.location))].sort()
   const displayed = filter ? tips.filter(t => t.location === filter) : tips
@@ -95,6 +120,10 @@ export default function TipsSection({ tripId, initialTips }: { tripId: string; i
                           {tip.source && <div className="text-xs text-gray-400 mt-0.5">{tip.source}</div>}
                         </div>
                         <button
+                          onClick={() => startEdit(tip)}
+                          className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-600 text-xs transition flex-shrink-0"
+                        >ערכי</button>
+                        <button
                           onClick={() => remove(tip.id)}
                           className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 text-xs transition flex-shrink-0"
                         >✕</button>
@@ -121,8 +150,10 @@ export default function TipsSection({ tripId, initialTips }: { tripId: string; i
               <input placeholder="מקור (אופציונלי)" value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
               <div className="flex gap-2">
-                <button onClick={add} className="flex-1 bg-blue-600 text-white text-sm py-2 rounded-lg hover:bg-blue-700 transition">שמרי</button>
-                <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 text-gray-700 text-sm py-2 rounded-lg hover:bg-gray-300 transition">ביטול</button>
+                <button onClick={editingId ? saveEdit : add} className="flex-1 bg-blue-600 text-white text-sm py-2 rounded-lg hover:bg-blue-700 transition">
+                  {editingId ? 'עדכני' : 'שמרי'}
+                </button>
+                <button onClick={closeForm} className="flex-1 bg-gray-200 text-gray-700 text-sm py-2 rounded-lg hover:bg-gray-300 transition">ביטול</button>
               </div>
             </div>
           ) : (

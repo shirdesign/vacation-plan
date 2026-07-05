@@ -20,6 +20,9 @@ export default function BudgetPlanner({
 }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [editingNameId, setEditingNameId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editIcon, setEditIcon] = useState('💰')
   const [showAddCat, setShowAddCat] = useState(false)
   const [newCatName, setNewCatName] = useState('')
   const [newCatIcon, setNewCatIcon] = useState('💰')
@@ -60,6 +63,14 @@ export default function BudgetPlanner({
     }
   }
 
+  async function saveNameIcon(cat: CatWithSpent) {
+    const name = editName.trim()
+    setEditingNameId(null)
+    if (!name) return
+    await supabase.from('budget_categories').update({ name, icon: editIcon }).eq('id', cat.id)
+    onCategoriesChange(baseCats(categories).map(c => c.id === cat.id ? { ...c, name, icon: editIcon } : c))
+  }
+
   async function deleteCategory(id: string) {
     await supabase.from('budget_categories').delete().eq('id', id)
     onCategoriesChange(baseCats(categories).filter(c => c.id !== id))
@@ -91,10 +102,34 @@ export default function BudgetPlanner({
           return (
             <div key={cat.id} className="py-2.5 group">
               <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center text-sm">
-                <span className="flex items-center gap-1.5 truncate">
-                  {cat.icon} {cat.name}
-                  {cat.is_fixed && <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">קבוע</span>}
-                </span>
+                {editingNameId === cat.id ? (
+                  <span className="flex items-center gap-1.5">
+                    <select
+                      value={editIcon}
+                      onChange={e => setEditIcon(e.target.value)}
+                      className="border border-blue-300 rounded px-1 py-0.5 text-sm focus:outline-none"
+                    >
+                      {[...new Set([editIcon, ...ICONS])].map(ic => <option key={ic} value={ic}>{ic}</option>)}
+                    </select>
+                    <input
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveNameIcon(cat); if (e.key === 'Escape') setEditingNameId(null) }}
+                      autoFocus
+                      className="w-24 border border-blue-300 rounded px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                    <button onClick={() => saveNameIcon(cat)} className="text-xs text-blue-600 hover:underline">שמרי</button>
+                  </span>
+                ) : (
+                  <span
+                    className="flex items-center gap-1.5 truncate cursor-pointer hover:text-blue-600"
+                    onClick={() => { setEditingNameId(cat.id); setEditName(cat.name); setEditIcon(cat.icon || '💰') }}
+                    title="לחצי לעריכת שם ואייקון"
+                  >
+                    {cat.icon} {cat.name}
+                    {cat.is_fixed && <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">קבוע</span>}
+                  </span>
+                )}
 
                 {/* Planned — editable */}
                 {editingId === cat.id ? (

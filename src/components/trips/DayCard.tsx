@@ -13,6 +13,7 @@ type DayCardProps = {
   startExpanded?: boolean
   onUpsertDay: (date: string, patch: Partial<TripDay>) => Promise<TripDay>
   onAddEvent: (date: string, event: Omit<DayEvent, 'id' | 'day_id'>) => Promise<void>
+  onUpdateEvent: (date: string, eventId: string, patch: Partial<DayEvent>) => Promise<void>
   onEventStatusChange: (date: string, eventId: string, status: DayEvent['status']) => void
   onDeleteEvent: (date: string, eventId: string) => void
   onMoveEvent: (fromDate: string, eventId: string, toDate: string) => void
@@ -20,7 +21,7 @@ type DayCardProps = {
 
 export default function DayCard({
   day, dayNumber, allDates, flights, startExpanded = false,
-  onUpsertDay, onAddEvent, onEventStatusChange, onDeleteEvent, onMoveEvent,
+  onUpsertDay, onAddEvent, onUpdateEvent, onEventStatusChange, onDeleteEvent, onMoveEvent,
 }: DayCardProps) {
   const [expanded, setExpanded] = useState(startExpanded)
   const [editingLocation, setEditingLocation] = useState(false)
@@ -30,6 +31,7 @@ export default function DayCard({
   const [editingNotes, setEditingNotes] = useState(false)
   const [notes, setNotes] = useState(day.notes || '')
   const [showAddEvent, setShowAddEvent] = useState(false)
+  const [editingEventId, setEditingEventId] = useState<string | null>(null)
 
   const events = day.day_events
 
@@ -183,15 +185,28 @@ export default function DayCard({
 
             <div className="space-y-2">
               {[...events].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')).map(event => (
-                <EventItem
-                  key={event.id}
-                  event={event}
-                  currentDate={day.date}
-                  allDates={allDates}
-                  onStatusChange={(id, status) => onEventStatusChange(day.date, id, status)}
-                  onDelete={(id) => onDeleteEvent(day.date, id)}
-                  onMove={(id, toDate) => onMoveEvent(day.date, id, toDate)}
-                />
+                editingEventId === event.id ? (
+                  <AddEventForm
+                    key={event.id}
+                    initial={event}
+                    onAdd={async (patch) => {
+                      await onUpdateEvent(day.date, event.id, patch)
+                      setEditingEventId(null)
+                    }}
+                    onCancel={() => setEditingEventId(null)}
+                  />
+                ) : (
+                  <EventItem
+                    key={event.id}
+                    event={event}
+                    currentDate={day.date}
+                    allDates={allDates}
+                    onEdit={(id) => setEditingEventId(id)}
+                    onStatusChange={(id, status) => onEventStatusChange(day.date, id, status)}
+                    onDelete={(id) => onDeleteEvent(day.date, id)}
+                    onMove={(id, toDate) => onMoveEvent(day.date, id, toDate)}
+                  />
+                )
               ))}
             </div>
 

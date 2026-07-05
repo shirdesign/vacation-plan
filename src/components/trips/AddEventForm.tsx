@@ -3,17 +3,19 @@ import { useState } from 'react'
 import { DayEvent } from '@/lib/types'
 
 export default function AddEventForm({
+  initial,
   onAdd,
   onCancel,
 }: {
+  initial?: DayEvent
   onAdd: (event: Omit<DayEvent, 'id' | 'day_id'>) => void
   onCancel: () => void
 }) {
-  const [title, setTitle] = useState('')
-  const [startTime, setStartTime] = useState('')
-  const [endTime, setEndTime] = useState('')
-  const [location, setLocation] = useState('')
-  const [description, setDescription] = useState('')
+  const [title, setTitle] = useState(initial?.title || '')
+  const [startTime, setStartTime] = useState(initial?.start_time?.slice(0, 5) || '')
+  const [endTime, setEndTime] = useState(initial?.end_time?.slice(0, 5) || '')
+  const [location, setLocation] = useState(initial?.location || '')
+  const [description, setDescription] = useState(initial?.description || '')
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,8 +26,8 @@ export default function AddEventForm({
       end_time: endTime || undefined,
       location: location || undefined,
       description: description || undefined,
-      status: 'planned',
-      sort_order: 0,
+      status: initial?.status || 'planned',
+      sort_order: initial?.sort_order ?? 0,
     })
   }
 
@@ -71,7 +73,7 @@ export default function AddEventForm({
       />
       <div className="flex gap-2">
         <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition">
-          הוסיפי
+          {initial ? 'עדכני' : 'הוסיפי'}
         </button>
         <button type="button" onClick={onCancel} className="text-gray-500 px-3 py-2 text-sm hover:text-gray-700">
           ביטול

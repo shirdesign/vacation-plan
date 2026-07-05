@@ -14,6 +14,7 @@ export default function EventItem({
   event,
   currentDate,
   allDates,
+  onEdit,
   onStatusChange,
   onDelete,
   onMove,
@@ -21,6 +22,7 @@ export default function EventItem({
   event: DayEvent
   currentDate: string
   allDates: string[]
+  onEdit: (id: string) => void
   onStatusChange: (id: string, status: DayEvent['status']) => void
   onDelete: (id: string) => void
   onMove: (id: string, toDate: string) => void
@@ -89,6 +91,12 @@ export default function EventItem({
               </button>
             ))}
             <hr className="my-1" />
+            <button
+              onClick={() => { onEdit(event.id); setMenuOpen(false) }}
+              className="block w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              ✏️ ערכי פרטים
+            </button>
             <button
               onClick={() => { setShowMove(true); setMenuOpen(false) }}
               className="block w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
