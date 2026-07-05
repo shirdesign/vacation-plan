@@ -4,6 +4,7 @@ import { Trip, TripDay, DayEvent, Expense } from '@/lib/types'
 import { format, parseISO, differenceInDays, eachDayOfInterval } from 'date-fns'
 import { he } from 'date-fns/locale'
 import JumpToToday from '@/components/share/JumpToToday'
+import TripMapSection from '@/components/map/TripMapSection'
 import type { TripTip } from '@/lib/types'
 
 const TIP_EMOJI: Record<string, string> = {
@@ -67,6 +68,9 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
             </div>
           </div>
         )}
+
+        {/* Route map */}
+        {t.share_show_itinerary && <TripMapSection days={days} />}
 
         {/* Itinerary */}
         {t.share_show_itinerary && (

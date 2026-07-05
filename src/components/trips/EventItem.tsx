@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { DayEvent } from '@/lib/types'
+import { format, parseISO } from 'date-fns'
 
 const STATUS_LABELS = { planned: 'מתוכנן', done: 'בוצע', cancelled: 'בוטל' }
 const STATUS_COLORS = {
@@ -11,14 +12,21 @@ const STATUS_COLORS = {
 
 export default function EventItem({
   event,
+  currentDate,
+  allDates,
   onStatusChange,
   onDelete,
+  onMove,
 }: {
   event: DayEvent
+  currentDate: string
+  allDates: string[]
   onStatusChange: (id: string, status: DayEvent['status']) => void
   onDelete: (id: string) => void
+  onMove: (id: string, toDate: string) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showMove, setShowMove] = useState(false)
 
   return (
     <div className={`flex items-start gap-3 p-3 rounded-xl border ${STATUS_COLORS[event.status]} relative`}>
@@ -45,6 +53,23 @@ export default function EventItem({
         {event.description && (
           <p className="text-xs text-gray-600 mt-1">{event.description}</p>
         )}
+        {showMove && (
+          <div className="flex items-center gap-2 mt-2">
+            <select
+              defaultValue=""
+              onChange={e => {
+                if (e.target.value) { onMove(event.id, e.target.value); setShowMove(false) }
+              }}
+              className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="" disabled>בחרי יום...</option>
+              {allDates.filter(d => d !== currentDate).map(d => (
+                <option key={d} value={d}>{format(parseISO(d), 'dd/MM')} · יום {['א','ב','ג','ד','ה','ו','ש'][parseISO(d).getDay()]}</option>
+              ))}
+            </select>
+            <button onClick={() => setShowMove(false)} className="text-xs text-gray-400 hover:text-gray-600">ביטול</button>
+          </div>
+        )}
       </div>
 
       {/* Menu */}
@@ -63,6 +88,13 @@ export default function EventItem({
                 {STATUS_LABELS[s]} {event.status === s ? '✓' : ''}
               </button>
             ))}
+            <hr className="my-1" />
+            <button
+              onClick={() => { setShowMove(true); setMenuOpen(false) }}
+              className="block w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              ⇄ העבירי ליום אחר
+            </button>
             <hr className="my-1" />
             <button
               onClick={() => { onDelete(event.id); setMenuOpen(false) }}
