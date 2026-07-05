@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Trip, BudgetCategory, Expense } from '@/lib/types'
 import AddExpenseForm from './AddExpenseForm'
+import BudgetPlanner from './BudgetPlanner'
 import { format, parseISO } from 'date-fns'
 
 export default function BudgetClient({
@@ -15,6 +16,7 @@ export default function BudgetClient({
   initialExpenses: Expense[]
 }) {
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses)
+  const [categories, setCategories] = useState<BudgetCategory[]>(initialCategories)
   const [showAdd, setShowAdd] = useState(false)
   const [filterCat, setFilterCat] = useState<string>('all')
   const supabase = createClient()
@@ -24,10 +26,12 @@ export default function BudgetClient({
   const spentPct = trip.total_budget > 0 ? Math.min((totalSpent / trip.total_budget) * 100, 100) : 0
 
   // Per-category spending
-  const catSpending = initialCategories.map(cat => {
+  const catSpending = categories.map(cat => {
     const spent = expenses.filter(e => e.category_id === cat.id).reduce((s, e) => s + Number(e.amount), 0)
     return { ...cat, spent }
   })
+
+  const totalPlanned = categories.reduce((s, c) => s + Number(c.planned_amount || 0), 0)
 
   async function addExpense(data: Omit<Expense, 'id' | 'created_at'>) {
     const { data: exp } = await supabase
@@ -74,33 +78,29 @@ export default function BudgetClient({
           />
         </div>
         <p className="text-xs text-gray-400 mt-1 text-left">{spentPct.toFixed(1)}% מהתקציב ({trip.currency})</p>
+
+        {/* Planned total vs trip budget */}
+        {totalPlanned > 0 && (
+          <div className={`mt-3 pt-3 border-t border-gray-100 text-xs flex items-center justify-between ${
+            totalPlanned > trip.total_budget ? 'text-red-500' : 'text-gray-500'
+          }`}>
+            <span>סך הקטגוריות המשוערות: <strong>{totalPlanned.toLocaleString()} {trip.currency}</strong></span>
+            <span>
+              {totalPlanned > trip.total_budget
+                ? `⚠️ ${(totalPlanned - trip.total_budget).toLocaleString()} מעל התקציב`
+                : `${(trip.total_budget - totalPlanned).toLocaleString()} לא הוקצה`}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Per-category breakdown */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <h2 className="font-semibold text-gray-700 mb-3">לפי קטגוריה</h2>
-        <div className="space-y-3">
-          {catSpending.map(cat => (
-            <div key={cat.id}>
-              <div className="flex items-center justify-between text-sm mb-1">
-                <span>{cat.icon} {cat.name}</span>
-                <span className="text-gray-600 font-medium">
-                  {cat.spent.toLocaleString()}
-                  {cat.planned_amount > 0 && <span className="text-gray-400"> / {cat.planned_amount.toLocaleString()}</span>}
-                </span>
-              </div>
-              {cat.planned_amount > 0 && (
-                <div className="w-full bg-gray-100 rounded-full h-1.5">
-                  <div
-                    className={`h-1.5 rounded-full ${cat.spent > cat.planned_amount ? 'bg-red-400' : 'bg-blue-400'}`}
-                    style={{ width: `${Math.min((cat.spent / cat.planned_amount) * 100, 100)}%` }}
-                  />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Planned vs actual comparison */}
+      <BudgetPlanner
+        tripId={trip.id}
+        currency={trip.currency}
+        categories={catSpending}
+        onCategoriesChange={setCategories}
+      />
 
       {/* Add expense button */}
       <button
@@ -114,7 +114,7 @@ export default function BudgetClient({
         <AddExpenseForm
           tripId={trip.id}
           currency={trip.currency}
-          categories={initialCategories}
+          categories={categories}
           onAdd={addExpense}
           onCancel={() => setShowAdd(false)}
         />
@@ -130,7 +130,7 @@ export default function BudgetClient({
             className="text-sm border border-gray-200 rounded-lg px-2 py-1"
           >
             <option value="all">כל הקטגוריות</option>
-            {initialCategories.map(c => (
+            {categories.map(c => (
               <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
             ))}
           </select>

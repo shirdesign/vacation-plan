@@ -46,6 +46,7 @@ export type BudgetCategory = {
   planned_amount: number
   icon: string
   sort_order: number
+  is_fixed?: boolean
 }
 
 export type ChecklistItem = {
