@@ -3,8 +3,19 @@ import { useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { geocodeLocation } from '@/lib/geocode'
-import { TripDay } from '@/lib/types'
 import type { MapPoint } from './TripMap'
+
+// Minimal projection of TripDay — only what the map needs.
+// Keep it narrow: client-component props are serialized into the page payload,
+// so passing full rows would expose unrendered fields (e.g. on the share page).
+export type MapDay = {
+  id: string
+  date: string
+  title?: string
+  location_name?: string
+  location_lat?: number
+  location_lng?: number
+}
 
 // Leaflet touches `window`, so the map must be client-only
 const TripMap = dynamic(() => import('./TripMap'), {
@@ -16,10 +27,10 @@ export default function TripMapSection({
   days,
   editable = false,
 }: {
-  days: TripDay[]
+  days: MapDay[]
   editable?: boolean
 }) {
-  const [localDays, setLocalDays] = useState<TripDay[]>(days)
+  const [localDays, setLocalDays] = useState<MapDay[]>(days)
   const [locating, setLocating] = useState(false)
   const [progress, setProgress] = useState('')
   const supabase = createClient()

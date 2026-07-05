@@ -69,8 +69,19 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
           </div>
         )}
 
-        {/* Route map */}
-        {t.share_show_itinerary && <TripMapSection days={days} />}
+        {/* Route map — pass only the fields the map renders, nothing more */}
+        {t.share_show_itinerary && (
+          <TripMapSection
+            days={(days || []).map(d => ({
+              id: d.id,
+              date: d.date,
+              title: d.title,
+              location_name: d.location_name,
+              location_lat: d.location_lat,
+              location_lng: d.location_lng,
+            }))}
+          />
+        )}
 
         {/* Itinerary */}
         {t.share_show_itinerary && (

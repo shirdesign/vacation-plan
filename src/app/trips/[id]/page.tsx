@@ -169,8 +169,18 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           </Link>
         </div>
 
-        {/* Route map */}
-        <TripMapSection days={(tripDays || []) as TripDay[]} editable />
+        {/* Route map — pass only the fields the map renders */}
+        <TripMapSection
+          days={((tripDays || []) as TripDay[]).map(d => ({
+            id: d.id,
+            date: d.date,
+            title: d.title,
+            location_name: d.location_name,
+            location_lat: d.location_lat,
+            location_lng: d.location_lng,
+          }))}
+          editable
+        />
 
         {/* Domestic flights */}
         <FlightsSection
