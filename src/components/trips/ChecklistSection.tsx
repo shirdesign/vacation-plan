@@ -8,7 +8,22 @@ export default function ChecklistSection({ tripId, initialItems }: { tripId: str
   const [newText, setNewText] = useState('')
   const [adding, setAdding] = useState(false)
   const [open, setOpen] = useState(true)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
   const supabase = createClient()
+
+  async function saveEdit(item: ChecklistItem) {
+    const text = editText.trim()
+    setEditingId(null)
+    if (!text || text === item.text) return
+    const { data } = await supabase
+      .from('trip_checklists')
+      .update({ text })
+      .eq('id', item.id)
+      .select()
+      .single()
+    if (data) setItems(prev => prev.map(i => i.id === item.id ? data : i))
+  }
 
   const done = items.filter(i => i.is_done).length
 
@@ -70,9 +85,24 @@ export default function ChecklistSection({ tripId, initialItems }: { tripId: str
                   {item.is_done && <span className="text-white text-xs">✓</span>}
                 </div>
               </button>
-              <span className={`flex-1 text-sm ${item.is_done ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                {item.text}
-              </span>
+              {editingId === item.id ? (
+                <input
+                  value={editText}
+                  onChange={e => setEditText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveEdit(item); if (e.key === 'Escape') setEditingId(null) }}
+                  onBlur={() => saveEdit(item)}
+                  autoFocus
+                  className="flex-1 text-sm border border-blue-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              ) : (
+                <span
+                  onClick={() => { setEditingId(item.id); setEditText(item.text) }}
+                  title="לחצי לעריכה"
+                  className={`flex-1 text-sm cursor-text ${item.is_done ? 'line-through text-gray-400' : 'text-gray-700'}`}
+                >
+                  {item.text}
+                </span>
+              )}
               <button
                 onClick={() => remove(item.id)}
                 className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 text-xs transition"

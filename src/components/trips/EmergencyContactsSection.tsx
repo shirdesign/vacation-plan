@@ -3,21 +3,47 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { EmergencyContact } from '@/lib/types'
 
+const EMPTY_FORM = { name: '', role: '', phone: '', notes: '' }
+
 export default function EmergencyContactsSection({ tripId, initialContacts }: { tripId: string; initialContacts: EmergencyContact[] }) {
   const [contacts, setContacts] = useState<EmergencyContact[]>(initialContacts)
   const [open, setOpen] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', role: '', phone: '', notes: '' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState(EMPTY_FORM)
   const supabase = createClient()
 
-  async function add() {
+  function startEdit(c: EmergencyContact) {
+    setEditingId(c.id)
+    setForm({ name: c.name, role: c.role || '', phone: c.phone || '', notes: c.notes || '' })
+    setShowForm(true)
+  }
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+  }
+
+  async function save() {
     if (!form.name.trim()) return
-    const { data } = await supabase
-      .from('trip_emergency_contacts')
-      .insert({ trip_id: tripId, ...form, sort_order: contacts.length + 1 })
-      .select()
-      .single()
-    if (data) { setContacts(prev => [...prev, data]); setForm({ name: '', role: '', phone: '', notes: '' }); setShowForm(false) }
+    if (editingId) {
+      const { data } = await supabase
+        .from('trip_emergency_contacts')
+        .update({ name: form.name.trim(), role: form.role || null, phone: form.phone || null, notes: form.notes || null })
+        .eq('id', editingId)
+        .select()
+        .single()
+      if (data) setContacts(prev => prev.map(c => c.id === editingId ? data : c))
+    } else {
+      const { data } = await supabase
+        .from('trip_emergency_contacts')
+        .insert({ trip_id: tripId, ...form, sort_order: contacts.length + 1 })
+        .select()
+        .single()
+      if (data) setContacts(prev => [...prev, data])
+    }
+    closeForm()
   }
 
   async function remove(id: string) {
@@ -50,10 +76,16 @@ export default function EmergencyContactsSection({ tripId, initialContacts }: { 
                 )}
                 {c.notes && <div className="text-xs text-gray-400 mt-1">{c.notes}</div>}
               </div>
-              <button
-                onClick={() => remove(c.id)}
-                className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 text-xs transition"
-              >✕</button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => startEdit(c)}
+                  className="text-xs text-blue-500 hover:underline"
+                >ערכי</button>
+                <button
+                  onClick={() => remove(c.id)}
+                  className="text-gray-300 hover:text-red-400 text-xs transition"
+                >✕</button>
+              </div>
             </div>
           ))}
 
@@ -65,9 +97,13 @@ export default function EmergencyContactsSection({ tripId, initialContacts }: { 
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
               <input placeholder="טלפון" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              <input placeholder="הערות" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
               <div className="flex gap-2">
-                <button onClick={add} className="flex-1 bg-blue-600 text-white text-sm py-2 rounded-lg hover:bg-blue-700 transition">שמרי</button>
-                <button onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 text-gray-700 text-sm py-2 rounded-lg hover:bg-gray-300 transition">ביטול</button>
+                <button onClick={save} className="flex-1 bg-blue-600 text-white text-sm py-2 rounded-lg hover:bg-blue-700 transition">
+                  {editingId ? 'עדכני' : 'שמרי'}
+                </button>
+                <button onClick={closeForm} className="flex-1 bg-gray-200 text-gray-700 text-sm py-2 rounded-lg hover:bg-gray-300 transition">ביטול</button>
               </div>
             </div>
           ) : (

@@ -77,6 +77,28 @@ export default function ItineraryClient({
     }
   }
 
+  async function updateEvent(date: string, eventId: string, patch: Partial<DayEvent>) {
+    const { data } = await supabase
+      .from('day_events')
+      .update({
+        title: patch.title,
+        start_time: patch.start_time || null,
+        end_time: patch.end_time || null,
+        location: patch.location || null,
+        description: patch.description || null,
+      })
+      .eq('id', eventId)
+      .select()
+      .single()
+    if (data) {
+      setDays(prev => prev.map(d =>
+        d.date === date
+          ? { ...d, day_events: d.day_events.map(e => e.id === eventId ? data as DayEvent : e) }
+          : d
+      ))
+    }
+  }
+
   async function updateEventStatus(date: string, eventId: string, status: DayEvent['status']) {
     await supabase.from('day_events').update({ status }).eq('id', eventId)
     setDays(prev => prev.map(d =>
@@ -127,6 +149,7 @@ export default function ItineraryClient({
         startExpanded={startExpanded}
         onUpsertDay={upsertDay}
         onAddEvent={addEvent}
+        onUpdateEvent={updateEvent}
         onEventStatusChange={updateEventStatus}
         onDeleteEvent={deleteEvent}
         onMoveEvent={moveEvent}

@@ -19,7 +19,36 @@ export default function BudgetClient({
   const [categories, setCategories] = useState<BudgetCategory[]>(initialCategories)
   const [showAdd, setShowAdd] = useState(false)
   const [filterCat, setFilterCat] = useState<string>('all')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ description: '', amount: '', date: '', category_id: '' })
   const supabase = createClient()
+
+  function startEdit(e: Expense) {
+    setEditingId(e.id)
+    setEditForm({
+      description: e.description,
+      amount: String(e.amount),
+      date: e.date,
+      category_id: e.category_id || '',
+    })
+  }
+
+  async function saveEdit() {
+    if (!editingId) return
+    const { data } = await supabase
+      .from('expenses')
+      .update({
+        description: editForm.description || 'הוצאה',
+        amount: parseFloat(editForm.amount) || 0,
+        date: editForm.date,
+        category_id: editForm.category_id || null,
+      })
+      .eq('id', editingId)
+      .select('*, budget_categories(name, icon), trip_days(date)')
+      .single()
+    if (data) setExpenses(prev => prev.map(e => e.id === editingId ? data as Expense : e))
+    setEditingId(null)
+  }
 
   const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount), 0)
   const remaining = trip.total_budget - totalSpent
@@ -144,7 +173,51 @@ export default function BudgetClient({
         ) : (
           <div className="divide-y divide-gray-100">
             {filtered.map(expense => (
-              <div key={expense.id} className="flex items-center justify-between px-5 py-3">
+              editingId === expense.id ? (
+                <div key={expense.id} className="px-5 py-3 bg-blue-50 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      value={editForm.description}
+                      onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                      placeholder="תיאור"
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={editForm.amount}
+                      onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
+                      placeholder="סכום"
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={editForm.date}
+                      onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    <select
+                      value={editForm.category_id}
+                      onChange={e => setEditForm(f => ({ ...f, category_id: e.target.value }))}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    >
+                      <option value="">ללא קטגוריה</option>
+                      {categories.map(c => (
+                        <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={saveEdit} className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-blue-700 transition">עדכני</button>
+                    <button onClick={() => setEditingId(null)} className="text-gray-500 px-3 py-1.5 text-sm hover:text-gray-700">ביטול</button>
+                  </div>
+                </div>
+              ) : (
+              <div key={expense.id} className="flex items-center justify-between px-5 py-3 group">
                 <div className="flex items-center gap-3">
                   <span className="text-lg">
                     {expense.budget_categories?.icon || '💰'}
@@ -161,6 +234,12 @@ export default function BudgetClient({
                     {Number(expense.amount).toLocaleString()} {expense.currency}
                   </span>
                   <button
+                    onClick={() => startEdit(expense)}
+                    className="text-xs text-blue-400 hover:text-blue-600 transition"
+                  >
+                    ערכי
+                  </button>
+                  <button
                     onClick={() => deleteExpense(expense.id)}
                     className="text-gray-300 hover:text-red-400 transition text-lg leading-none"
                   >
@@ -168,6 +247,7 @@ export default function BudgetClient({
                   </button>
                 </div>
               </div>
+              )
             ))}
           </div>
         )}
