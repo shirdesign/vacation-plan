@@ -2,13 +2,15 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import NavBar from '@/components/ui/NavBar'
-import { Trip } from '@/lib/types'
+import { Trip, TripDay, TripFlight } from '@/lib/types'
 import { format, parseISO, differenceInDays } from 'date-fns'
 import ShareButton from '@/components/trips/ShareButton'
 import ChecklistSection from '@/components/trips/ChecklistSection'
 import TipsSection from '@/components/trips/TipsSection'
 import EmergencyContactsSection from '@/components/trips/EmergencyContactsSection'
 import PlanTripButton from '@/components/trips/PlanTripButton'
+import FlightsSection from '@/components/trips/FlightsSection'
+import TripMapSection from '@/components/map/TripMapSection'
 
 export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -29,11 +31,13 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const days = differenceInDays(parseISO(t.end_date), parseISO(t.start_date)) + 1
 
   // Get total spent
-  const [{ data: expenses }, { data: checklist }, { data: tips }, { data: contacts }] = await Promise.all([
+  const [{ data: expenses }, { data: checklist }, { data: tips }, { data: contacts }, { data: flights }, { data: tripDays }] = await Promise.all([
     supabase.from('expenses').select('amount, date, budget_categories(is_fixed)').eq('trip_id', id),
     supabase.from('trip_checklists').select('*').eq('trip_id', id).order('sort_order'),
     supabase.from('trip_tips').select('*').eq('trip_id', id).order('location').order('sort_order'),
     supabase.from('trip_emergency_contacts').select('*').eq('trip_id', id).order('sort_order'),
+    supabase.from('trip_flights').select('*').eq('trip_id', id).order('flight_date'),
+    supabase.from('trip_days').select('*').eq('trip_id', id).order('date'),
   ])
 
   type ExpenseRow = { amount: number; date: string; budget_categories: { is_fixed: boolean } | null }
@@ -74,7 +78,15 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
             <h1 className="text-2xl font-bold text-gray-800">{t.name}</h1>
             <p className="text-gray-500 mt-1">📍 {t.destination} · {days} ימים · {format(parseISO(t.start_date), 'dd/MM/yyyy')} – {format(parseISO(t.end_date), 'dd/MM/yyyy')}</p>
           </div>
-          <ShareButton tripId={id} shareToken={t.share_token} />
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/trips/${id}/edit`}
+              className="text-sm bg-white border border-gray-200 hover:border-blue-300 text-gray-600 px-3 py-1.5 rounded-lg transition"
+            >
+              ✏️ עריכה
+            </Link>
+            <ShareButton tripId={id} shareToken={t.share_token} />
+          </div>
         </div>
 
         {/* Budget summary card */}
@@ -149,7 +161,35 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           >
             💰 תקציב והוצאות
           </Link>
+          <Link
+            href={`/trips/${id}/places`}
+            className="flex-1 text-center bg-white border border-gray-200 hover:border-blue-300 text-gray-700 font-semibold py-3 rounded-xl transition"
+          >
+            📍 מקומות
+          </Link>
         </div>
+
+        {/* Route map — pass only the fields the map renders */}
+        <TripMapSection
+          days={((tripDays || []) as TripDay[]).map(d => ({
+            id: d.id,
+            date: d.date,
+            title: d.title,
+            location_name: d.location_name,
+            location_lat: d.location_lat,
+            location_lng: d.location_lng,
+          }))}
+          editable
+        />
+
+        {/* Domestic flights */}
+        <FlightsSection
+          tripId={id}
+          currency={t.currency}
+          startDate={t.start_date}
+          endDate={t.end_date}
+          initialFlights={(flights || []) as TripFlight[]}
+        />
 
         {t.description && (
           <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">

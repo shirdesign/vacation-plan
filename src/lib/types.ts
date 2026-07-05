@@ -78,6 +78,37 @@ export type TripTip = {
   sort_order: number
 }
 
+export type TripFlight = {
+  id: string
+  trip_id: string
+  from_location: string
+  to_location: string
+  flight_date: string
+  depart_time?: string
+  airline?: string
+  flight_number?: string
+  price: number
+  currency: string
+  is_booked: boolean
+  notes?: string
+  expense_id?: string
+  created_at: string
+}
+
+export type PlaceActivity = {
+  id: string
+  trip_id: string
+  location: string
+  title: string
+  description?: string
+  category: string
+  est_cost?: number
+  source: string
+  added_event_id?: string
+  sort_order: number
+  created_at: string
+}
+
 export type Expense = {
   id: string
   trip_id: string

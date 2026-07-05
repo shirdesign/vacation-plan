@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import ItineraryClient from '@/components/trips/ItineraryClient'
-import { Trip, TripDay, DayEvent } from '@/lib/types'
+import { Trip, TripDay, DayEvent, TripFlight } from '@/lib/types'
 import { eachDayOfInterval, parseISO, format } from 'date-fns'
 import Link from 'next/link'
 
@@ -21,11 +21,18 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
 
   if (!trip) notFound()
 
-  const { data: days } = await supabase
-    .from('trip_days')
-    .select('*, day_events(*)')
-    .eq('trip_id', id)
-    .order('date', { ascending: true })
+  const [{ data: days }, { data: flights }] = await Promise.all([
+    supabase
+      .from('trip_days')
+      .select('*, day_events(*)')
+      .eq('trip_id', id)
+      .order('date', { ascending: true }),
+    supabase
+      .from('trip_flights')
+      .select('*')
+      .eq('trip_id', id)
+      .order('flight_date', { ascending: true }),
+  ])
 
   // Build full date range with existing days merged in
   const allDates = eachDayOfInterval({
@@ -37,7 +44,10 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
 
   const fullDays = allDates.map(date => {
     const dateStr = format(date, 'yyyy-MM-dd')
-    return daysMap.get(dateStr) || { date: dateStr, trip_id: id, day_events: [] }
+    const existing = daysMap.get(dateStr)
+    return existing
+      ? { ...existing, day_events: existing.day_events || [] }
+      : { date: dateStr, trip_id: id, day_events: [] as DayEvent[] }
   })
 
   return (
@@ -51,7 +61,11 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
             <p className="text-sm text-gray-500">{trip.name}</p>
           </div>
         </div>
-        <ItineraryClient trip={trip as Trip} initialDays={fullDays} />
+        <ItineraryClient
+          trip={trip as Trip}
+          initialDays={fullDays as (TripDay & { day_events: DayEvent[] })[]}
+          flights={(flights || []) as TripFlight[]}
+        />
       </main>
     </div>
   )
