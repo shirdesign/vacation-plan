@@ -14,6 +14,8 @@ export default function BudgetPlanner({
   currency,
   categories,
   onCategoriesChange,
+  plannedKey = 'planned_amount',
+  personName,
   flightsPanel,
   flightsCount = 0,
 }: {
@@ -21,6 +23,8 @@ export default function BudgetPlanner({
   currency: string
   categories: CatWithSpent[]
   onCategoriesChange: (cats: BudgetCategory[]) => void
+  plannedKey?: 'planned_amount' | 'companion_planned_amount'
+  personName?: string
   flightsPanel?: React.ReactNode
   flightsCount?: number
 }) {
@@ -36,7 +40,7 @@ export default function BudgetPlanner({
   const [newCatPlanned, setNewCatPlanned] = useState('')
   const supabase = createClient()
 
-  const totalPlanned = categories.reduce((s, c) => s + Number(c.planned_amount || 0), 0)
+  const totalPlanned = categories.reduce((s, c) => s + Number(c[plannedKey] || 0), 0)
   const totalSpent = categories.reduce((s, c) => s + c.spent, 0)
   const totalDiff = totalPlanned - totalSpent
 
@@ -46,8 +50,8 @@ export default function BudgetPlanner({
 
   async function savePlanned(cat: CatWithSpent) {
     const amount = parseFloat(editValue) || 0
-    await supabase.from('budget_categories').update({ planned_amount: amount }).eq('id', cat.id)
-    onCategoriesChange(baseCats(categories).map(c => c.id === cat.id ? { ...c, planned_amount: amount } : c))
+    await supabase.from('budget_categories').update({ [plannedKey]: amount }).eq('id', cat.id)
+    onCategoriesChange(baseCats(categories).map(c => c.id === cat.id ? { ...c, [plannedKey]: amount } : c))
     setEditingId(null)
   }
 
@@ -59,7 +63,8 @@ export default function BudgetPlanner({
         trip_id: tripId,
         name: newCatName.trim(),
         icon: newCatIcon,
-        planned_amount: parseFloat(newCatPlanned) || 0,
+        planned_amount: plannedKey === 'planned_amount' ? parseFloat(newCatPlanned) || 0 : 0,
+        companion_planned_amount: plannedKey === 'companion_planned_amount' ? parseFloat(newCatPlanned) || 0 : 0,
         sort_order: categories.length + 1,
       })
       .select()
@@ -86,7 +91,9 @@ export default function BudgetPlanner({
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-gray-700">משוער מול בפועל</h2>
+        <h2 className="font-semibold text-gray-700">
+          משוער מול בפועל{personName && <span className="text-sm font-normal text-gray-400"> — {personName}</span>}
+        </h2>
         <button onClick={() => setShowAddCat(true)} className="text-xs text-blue-600 hover:underline">
           + קטגוריה
         </button>
@@ -94,7 +101,7 @@ export default function BudgetPlanner({
 
       <div className="divide-y divide-gray-100">
         {categories.map(cat => {
-          const planned = Number(cat.planned_amount || 0)
+          const planned = Number(cat[plannedKey] || 0)
           const diff = planned - cat.spent
           const overBudget = planned > 0 && cat.spent > planned
           const pct = planned > 0 ? Math.min((cat.spent / planned) * 100, 100) : 0

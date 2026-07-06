@@ -47,6 +47,7 @@ export type BudgetCategory = {
   trip_id: string
   name: string
   planned_amount: number
+  companion_planned_amount?: number
   icon: string
   sort_order: number
   is_fixed?: boolean

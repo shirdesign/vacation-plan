@@ -21,6 +21,7 @@ export default function AddExpenseForm({
   categories,
   travelerName,
   companionName,
+  defaultPayer = 'me',
   onAdd,
   onCancel,
 }: {
@@ -29,12 +30,13 @@ export default function AddExpenseForm({
   categories: BudgetCategory[]
   travelerName?: string
   companionName?: string
+  defaultPayer?: ExpensePayer
   onAdd: (data: Omit<Expense, 'id' | 'created_at'>) => void
   onCancel: () => void
 }) {
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
-  const [paidBy, setPaidBy] = useState<ExpensePayer>('me')
+  const [paidBy, setPaidBy] = useState<ExpensePayer>(defaultPayer)
   const [sharedPayer, setSharedPayer] = useState<'me' | 'companion' | null>(null)
   const [expCurrency, setExpCurrency] = useState(currency)
   const [rate, setRate] = useState<string>('')

@@ -31,20 +31,32 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
   // Get total spent
   const [{ data: expenses }, { data: checklist }, { data: tips }, { data: contacts }, { data: tripDays }] = await Promise.all([
-    supabase.from('expenses').select('amount, date, budget_categories(is_fixed)').eq('trip_id', id),
+    supabase.from('expenses').select('amount, date, paid_by, budget_categories(is_fixed)').eq('trip_id', id),
     supabase.from('trip_checklists').select('*').eq('trip_id', id).order('sort_order'),
     supabase.from('trip_tips').select('*').eq('trip_id', id).order('location').order('sort_order'),
     supabase.from('trip_emergency_contacts').select('*').eq('trip_id', id).order('sort_order'),
     supabase.from('trip_days').select('*').eq('trip_id', id).order('date'),
   ])
 
-  type ExpenseRow = { amount: number; date: string; budget_categories: { is_fixed: boolean } | null }
+  type ExpenseRow = { amount: number; date: string; paid_by: string | null; budget_categories: { is_fixed: boolean } | null }
   const expRows = (expenses || []) as unknown as ExpenseRow[]
   const totalSpent = expRows.reduce((sum, e) => sum + Number(e.amount), 0)
   const fixedSpent = expRows.filter(e => e.budget_categories?.is_fixed).reduce((s, e) => s + Number(e.amount), 0)
   const dailySpent = totalSpent - fixedSpent
-  const remaining = t.total_budget - totalSpent
-  const spentPct = t.total_budget > 0 ? Math.min((totalSpent / t.total_budget) * 100, 100) : 0
+
+  // Two travelers: each has her own budget; shared expenses split 50/50
+  const hasCompanion = !!t.companion_name
+  const sumBy = (payer: string) => expRows.filter(e => (e.paid_by || 'me') === payer).reduce((s, e) => s + Number(e.amount), 0)
+  const sharedHalf = sumBy('shared') / 2
+  const travelers = hasCompanion
+    ? [
+        { name: t.traveler_name || 'אני', budget: t.total_budget, spent: sumBy('me') + sharedHalf, color: 'blue' },
+        { name: t.companion_name!, budget: Number(t.companion_budget || 0), spent: sumBy('companion') + sharedHalf, color: 'purple' },
+      ]
+    : []
+  const combinedBudget = t.total_budget + (hasCompanion ? Number(t.companion_budget || 0) : 0)
+  const remaining = combinedBudget - totalSpent
+  const spentPct = combinedBudget > 0 ? Math.min((totalSpent / combinedBudget) * 100, 100) : 0
 
   // Daily budget math
   const today = new Date()
@@ -90,10 +102,12 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         {/* Budget summary card */}
         {t.total_budget > 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
-            <h2 className="font-semibold text-gray-700 mb-3">סיכום תקציב</h2>
+            <h2 className="font-semibold text-gray-700 mb-3">
+              סיכום תקציב{hasCompanion && <span className="text-sm font-normal text-gray-400"> · שתיהן ביחד</span>}
+            </h2>
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div className="text-center">
-                <div className="text-xl font-bold text-gray-800">{t.total_budget.toLocaleString()}</div>
+                <div className="text-xl font-bold text-gray-800">{combinedBudget.toLocaleString()}</div>
                 <div className="text-xs text-gray-500 mt-1">תקציב כולל ({t.currency})</div>
               </div>
               <div className="text-center">
@@ -114,6 +128,35 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               />
             </div>
             <p className="text-xs text-gray-400 mt-1 text-left">{spentPct.toFixed(0)}% מהתקציב</p>
+
+            {/* Per-traveler budgets — each has her own */}
+            {hasCompanion && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {travelers.map(p => {
+                  const left = p.budget - p.spent
+                  const pct = p.budget > 0 ? Math.min((p.spent / p.budget) * 100, 100) : 0
+                  return (
+                    <div key={p.name} className={`rounded-xl p-3 ${p.color === 'blue' ? 'bg-blue-50' : 'bg-purple-50'}`}>
+                      <div className={`text-sm font-semibold mb-1 ${p.color === 'blue' ? 'text-blue-700' : 'text-purple-700'}`}>{p.name}</div>
+                      <div className="text-xs text-gray-600">
+                        הוציאה <strong>{p.spent.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong> מתוך {p.budget.toLocaleString()}
+                      </div>
+                      <div className={`text-xs font-medium ${left >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                        נשאר {left.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </div>
+                      {p.budget > 0 && (
+                        <div className="w-full bg-white rounded-full h-1.5 mt-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${pct > 90 ? 'bg-red-400' : p.color === 'blue' ? 'bg-blue-400' : 'bg-purple-400'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Daily budget breakdown */}
             <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">

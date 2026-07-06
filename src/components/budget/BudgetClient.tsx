@@ -23,8 +23,10 @@ export default function BudgetClient({
   const [flightCount, setFlightCount] = useState(flights.length)
   const [showAdd, setShowAdd] = useState(false)
   const [filterCat, setFilterCat] = useState<string>('all')
+  const [filterPayer, setFilterPayer] = useState<'all' | ExpensePayer>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ description: '', amount: '', date: '', category_id: '', paid_by: 'me' as ExpensePayer, shared_payer: null as 'me' | 'companion' | null })
+  const [person, setPerson] = useState<'me' | 'companion'>('me')
   const supabase = createClient()
 
   const meName = trip.traveler_name || 'אני'
@@ -101,17 +103,33 @@ export default function BudgetClient({
     .reduce((s, e) => s + Number(e.amount) / 2, 0)
   const settleNet = owedToMe - owedToComp // >0: companion owes me
 
-  const combinedBudget = trip.total_budget + (hasCompanion ? Number(trip.companion_budget || 0) : 0)
-  const remaining = combinedBudget - totalSpent
-  const spentPct = combinedBudget > 0 ? Math.min((totalSpent / combinedBudget) * 100, 100) : 0
+  // The budget being viewed: with a companion each traveler has her own full
+  // budget (summary, categories, planned amounts); shared expenses count half for each
+  const plannedKey: 'planned_amount' | 'companion_planned_amount' =
+    hasCompanion && person === 'companion' ? 'companion_planned_amount' : 'planned_amount'
+  const personName = person === 'me' ? meName : (compName || '')
+  const viewBudget = hasCompanion
+    ? (person === 'me' ? trip.total_budget : Number(trip.companion_budget || 0))
+    : trip.total_budget
+  const viewSpent = hasCompanion ? (person === 'me' ? meSpent : compSpent) : totalSpent
+  const remaining = viewBudget - viewSpent
+  const spentPct = viewBudget > 0 ? Math.min((viewSpent / viewBudget) * 100, 100) : 0
 
-  // Per-category spending
+  // Per-category spending for the viewed traveler
   const catSpending = categories.map(cat => {
-    const spent = expenses.filter(e => e.category_id === cat.id).reduce((s, e) => s + Number(e.amount), 0)
+    const catExp = expenses.filter(e => e.category_id === cat.id)
+    let spent: number
+    if (!hasCompanion) {
+      spent = catExp.reduce((s, e) => s + Number(e.amount), 0)
+    } else {
+      const own = catExp.filter(e => (e.paid_by || 'me') === person).reduce((s, e) => s + Number(e.amount), 0)
+      const sharedHalf = catExp.filter(e => e.paid_by === 'shared').reduce((s, e) => s + Number(e.amount), 0) / 2
+      spent = own + sharedHalf
+    }
     return { ...cat, spent }
   })
 
-  const totalPlanned = categories.reduce((s, c) => s + Number(c.planned_amount || 0), 0)
+  const totalPlanned = categories.reduce((s, c) => s + Number(c[plannedKey] || 0), 0)
 
   async function addExpense(data: Omit<Expense, 'id' | 'created_at'>) {
     const { data: exp } = await supabase
@@ -142,27 +160,51 @@ export default function BudgetClient({
     shared: 'bg-green-50 text-green-600 border-green-200',
   }
 
-  const filtered = filterCat === 'all' ? expenses : expenses.filter(e => e.category_id === filterCat)
+  const filtered = expenses
+    .filter(e => filterCat === 'all' || e.category_id === filterCat)
+    .filter(e => filterPayer === 'all' || (e.paid_by || 'me') === filterPayer)
 
   return (
     <div className="space-y-5">
-      {/* Budget overview */}
+      {/* Whose budget are we looking at */}
+      {hasCompanion && (
+        <div className="grid grid-cols-2 bg-gray-100 rounded-xl p-1 gap-1">
+          {([
+            { value: 'me' as const, label: meName },
+            { value: 'companion' as const, label: compName! },
+          ]).map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setPerson(opt.value)}
+              className={`py-2.5 rounded-lg text-sm font-semibold transition ${
+                person === opt.value
+                  ? opt.value === 'me' ? 'bg-white shadow text-blue-600' : 'bg-white shadow text-purple-600'
+                  : 'text-gray-500'
+              }`}
+            >
+              💰 התקציב של {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Budget overview — the viewed traveler's own numbers */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
         <h2 className="font-semibold text-gray-700 mb-4">
-          סיכום תקציב{hasCompanion && <span className="text-sm font-normal text-gray-400"> · {meName} + {compName} ביחד</span>}
+          {hasCompanion ? `סיכום תקציב — ${personName}` : 'סיכום תקציב'}
         </h2>
         <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4">
           <div className="text-center p-3 bg-gray-50 rounded-xl">
-            <div className="text-lg sm:text-xl font-bold text-gray-800">{combinedBudget.toLocaleString()}</div>
-            <div className="text-xs text-gray-500 mt-1">תקציב כולל</div>
+            <div className="text-lg sm:text-xl font-bold text-gray-800">{viewBudget.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 mt-1">תקציב</div>
           </div>
           <div className="text-center p-3 bg-orange-50 rounded-xl">
-            <div className="text-lg sm:text-xl font-bold text-orange-500">{totalSpent.toLocaleString()}</div>
+            <div className="text-lg sm:text-xl font-bold text-orange-500">{viewSpent.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
             <div className="text-xs text-gray-500 mt-1">הוצא עד כה</div>
           </div>
           <div className={`text-center p-3 rounded-xl ${remaining >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
             <div className={`text-lg sm:text-xl font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {remaining.toLocaleString()}
+              {remaining.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </div>
             <div className="text-xs text-gray-500 mt-1">נשאר</div>
           </div>
@@ -173,62 +215,53 @@ export default function BudgetClient({
             style={{ width: `${spentPct}%` }}
           />
         </div>
-        <p className="text-xs text-gray-400 mt-1 text-left">{spentPct.toFixed(1)}% מהתקציב ({trip.currency})</p>
+        <p className="text-xs text-gray-400 mt-1 flex justify-between">
+          <span>{hasCompanion ? 'כולל מחצית מההוצאות המשותפות' : ''}</span>
+          <span>{spentPct.toFixed(1)}% מהתקציב ({trip.currency})</span>
+        </p>
 
-        {/* Planned total vs trip budget */}
+        {/* Planned total vs the viewed traveler's budget */}
         {totalPlanned > 0 && (
           <div className={`mt-3 pt-3 border-t border-gray-100 text-xs flex flex-wrap gap-1 items-center justify-between ${
-            totalPlanned > combinedBudget ? 'text-red-500' : 'text-gray-500'
+            totalPlanned > viewBudget ? 'text-red-500' : 'text-gray-500'
           }`}>
-            <span>סך הקטגוריות המשוערות: <strong>{totalPlanned.toLocaleString()} {trip.currency}</strong></span>
+            <span>הקטגוריות המשוערות של {hasCompanion ? personName : 'הטיול'}: <strong>{totalPlanned.toLocaleString()} {trip.currency}</strong></span>
             <span>
-              {totalPlanned > combinedBudget
-                ? `⚠️ ${(totalPlanned - combinedBudget).toLocaleString()} מעל התקציב`
-                : `${(combinedBudget - totalPlanned).toLocaleString()} לא הוקצה`}
+              {totalPlanned > viewBudget
+                ? `⚠️ ${(totalPlanned - viewBudget).toLocaleString()} מעל התקציב`
+                : `${(viewBudget - totalPlanned).toLocaleString()} לא הוקצה`}
             </span>
           </div>
         )}
       </div>
 
-      {/* Per-traveler split */}
+      {/* Joint view: who spent what + settling up */}
       {hasCompanion && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h2 className="font-semibold text-gray-700 mb-1">👯 מי הוציאה כמה</h2>
-          <p className="text-xs text-gray-400 mb-4">הוצאות משותפות מתחלקות חצי-חצי · {sharedSpent > 0 ? `${sharedSpent.toLocaleString()} ${trip.currency} משותפות עד כה` : 'אין עדיין הוצאות משותפות'}</p>
-          <div className="grid grid-cols-2 gap-3">
+          <h2 className="font-semibold text-gray-700 mb-1">👯 שתיהן ביחד</h2>
+          <p className="text-xs text-gray-400 mb-3">
+            {sharedSpent > 0 ? `${sharedSpent.toLocaleString()} ${trip.currency} הוצאות משותפות עד כה (מתחלקות חצי-חצי)` : 'אין עדיין הוצאות משותפות'}
+          </p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
             {[
               { name: meName, budget: trip.total_budget, spent: meSpent, color: 'blue' },
               { name: compName!, budget: Number(trip.companion_budget || 0), spent: compSpent, color: 'purple' },
             ].map(p => {
               const left = p.budget - p.spent
-              const pct = p.budget > 0 ? Math.min((p.spent / p.budget) * 100, 100) : 0
               return (
-                <div key={p.name} className={`rounded-xl p-3 ${p.color === 'blue' ? 'bg-blue-50' : 'bg-purple-50'}`}>
-                  <div className={`font-semibold text-sm mb-2 ${p.color === 'blue' ? 'text-blue-700' : 'text-purple-700'}`}>{p.name}</div>
-                  <div className="space-y-1 text-xs text-gray-600">
-                    <div className="flex justify-between"><span>תקציב</span><strong>{p.budget > 0 ? p.budget.toLocaleString() : '—'}</strong></div>
-                    <div className="flex justify-between"><span>הוציאה</span><strong>{p.spent.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></div>
-                    <div className="flex justify-between">
-                      <span>נשאר</span>
-                      <strong className={p.budget > 0 ? (left >= 0 ? 'text-green-600' : 'text-red-500') : 'text-gray-400'}>
-                        {p.budget > 0 ? left.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
-                      </strong>
-                    </div>
-                  </div>
+                <div key={p.name} className={`rounded-xl px-3 py-2 text-xs ${p.color === 'blue' ? 'bg-blue-50' : 'bg-purple-50'}`}>
+                  <span className={`font-semibold ${p.color === 'blue' ? 'text-blue-700' : 'text-purple-700'}`}>{p.name}</span>
+                  <span className="text-gray-500"> · הוציאה {p.spent.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                   {p.budget > 0 && (
-                    <div className="w-full bg-white rounded-full h-1.5 mt-2">
-                      <div
-                        className={`h-1.5 rounded-full ${pct > 90 ? 'bg-red-400' : p.color === 'blue' ? 'bg-blue-400' : 'bg-purple-400'}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
+                    <span className={left >= 0 ? 'text-green-600' : 'text-red-500'}> · נשאר {left.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                   )}
                 </div>
               )
             })}
           </div>
+
           {/* Who owes whom */}
-          <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium text-center ${
+          <div className={`rounded-xl px-4 py-3 text-sm font-medium text-center ${
             settleNet === 0 ? 'bg-gray-50 text-gray-500' : 'bg-amber-50 text-amber-700 border border-amber-200'
           }`}>
             {settleNet === 0
@@ -238,20 +271,19 @@ export default function BudgetClient({
                 : <>💸 <strong>{meName}</strong> חייבת ל<strong>{compName}</strong> {Math.abs(settleNet).toLocaleString(undefined, { maximumFractionDigits: 0 })} {trip.currency}</>}
           </div>
           <p className="text-[11px] text-gray-400 mt-1.5 text-center">
-            החישוב לפי הוצאות משותפות שאחת מכן שילמה לבד (בהוצאה משותפת מסמנים מי הוציאה את הכסף)
+            לפי הוצאות משותפות שאחת מכן שילמה לבד (בהוצאה משותפת מסמנים מי הוציאה את הכסף)
           </p>
-          {Number(trip.companion_budget || 0) === 0 && (
-            <p className="text-xs text-gray-400 mt-3">💡 אפשר להגדיר תקציב ל{compName} בעמוד עריכת הטיול</p>
-          )}
         </div>
       )}
 
-      {/* Planned vs actual comparison — flights are managed inside their category */}
+      {/* Planned vs actual — the viewed traveler's own categories; flights managed inside their category */}
       <BudgetPlanner
         tripId={trip.id}
         currency={trip.currency}
         categories={catSpending}
         onCategoriesChange={setCategories}
+        plannedKey={plannedKey}
+        personName={hasCompanion ? personName : undefined}
         flightsCount={flightCount}
         flightsPanel={
           <FlightsSection
@@ -282,6 +314,7 @@ export default function BudgetClient({
           categories={categories}
           travelerName={meName}
           companionName={compName}
+          defaultPayer={hasCompanion ? person : 'me'}
           onAdd={addExpense}
           onCancel={() => setShowAdd(false)}
         />
@@ -289,7 +322,7 @@ export default function BudgetClient({
 
       {/* Expenses list */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-700">כל ההוצאות</h2>
           <select
             value={filterCat}
@@ -301,6 +334,28 @@ export default function BudgetClient({
               <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
             ))}
           </select>
+          {hasCompanion && (
+            <div className="flex gap-1.5 w-full sm:w-auto">
+              {([
+                { value: 'all' as const, label: 'הכל' },
+                { value: 'me' as const, label: meName },
+                { value: 'companion' as const, label: compName! },
+                { value: 'shared' as const, label: '👯 משותף' },
+              ]).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setFilterPayer(opt.value)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                    filterPayer === opt.value
+                      ? 'bg-gray-800 text-white border-gray-800'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {filtered.length === 0 ? (
