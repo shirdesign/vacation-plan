@@ -20,7 +20,7 @@ export type MapDay = {
 // Leaflet touches `window`, so the map must be client-only
 const TripMap = dynamic(() => import('./TripMap'), {
   ssr: false,
-  loading: () => <div className="h-[360px] bg-gray-100 rounded-2xl animate-pulse" />,
+  loading: () => <div className="h-[380px] bg-gray-100 rounded-2xl animate-pulse" />,
 })
 
 export default function TripMapSection({
