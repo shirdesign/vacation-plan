@@ -20,6 +20,7 @@ export default function BudgetClient({
 }) {
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses)
   const [categories, setCategories] = useState<BudgetCategory[]>(initialCategories)
+  const [flightCount, setFlightCount] = useState(flights.length)
   const [showAdd, setShowAdd] = useState(false)
   const [filterCat, setFilterCat] = useState<string>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -35,14 +36,19 @@ export default function BudgetClient({
     shared: 'משותף',
   }
 
-  // Flights create/update/delete their own expenses — refetch to stay in sync
+  // Flights create/update/delete their own expenses (and may create the
+  // "טיסות פנים" category) — refetch both to stay in sync
   async function refetchExpenses() {
-    const { data } = await supabase
-      .from('expenses')
-      .select('*, budget_categories(name, icon), trip_days(date)')
-      .eq('trip_id', trip.id)
-      .order('date', { ascending: false })
-    if (data) setExpenses(data as Expense[])
+    const [{ data: exp }, { data: cats }] = await Promise.all([
+      supabase
+        .from('expenses')
+        .select('*, budget_categories(name, icon), trip_days(date)')
+        .eq('trip_id', trip.id)
+        .order('date', { ascending: false }),
+      supabase.from('budget_categories').select('*').eq('trip_id', trip.id).order('sort_order'),
+    ])
+    if (exp) setExpenses(exp as Expense[])
+    if (cats) setCategories(cats as BudgetCategory[])
   }
 
   function startEdit(e: Expense) {
@@ -120,6 +126,20 @@ export default function BudgetClient({
   async function deleteExpense(id: string) {
     await supabase.from('expenses').delete().eq('id', id)
     setExpenses(prev => prev.filter(e => e.id !== id))
+  }
+
+  // One tap on an expense's tag cycles: mine → hers → shared
+  async function cyclePayer(e: Expense) {
+    const order: ExpensePayer[] = ['me', 'companion', 'shared']
+    const next = order[(order.indexOf(e.paid_by || 'me') + 1) % order.length]
+    await supabase.from('expenses').update({ paid_by: next, shared_payer: null }).eq('id', e.id)
+    setExpenses(prev => prev.map(x => x.id === e.id ? { ...x, paid_by: next, shared_payer: null } : x))
+  }
+
+  const PAYER_TAG_STYLE: Record<ExpensePayer, string> = {
+    me: 'bg-blue-50 text-blue-600 border-blue-200',
+    companion: 'bg-purple-50 text-purple-600 border-purple-200',
+    shared: 'bg-green-50 text-green-600 border-green-200',
   }
 
   const filtered = filterCat === 'all' ? expenses : expenses.filter(e => e.category_id === filterCat)
@@ -226,22 +246,25 @@ export default function BudgetClient({
         </div>
       )}
 
-      {/* Planned vs actual comparison */}
+      {/* Planned vs actual comparison — flights are managed inside their category */}
       <BudgetPlanner
         tripId={trip.id}
         currency={trip.currency}
         categories={catSpending}
         onCategoriesChange={setCategories}
-      />
-
-      {/* Domestic flights — booked flights turn into expenses automatically */}
-      <FlightsSection
-        tripId={trip.id}
-        currency={trip.currency}
-        startDate={trip.start_date}
-        endDate={trip.end_date}
-        initialFlights={flights}
-        onExpensesChanged={refetchExpenses}
+        flightsCount={flightCount}
+        flightsPanel={
+          <FlightsSection
+            embedded
+            tripId={trip.id}
+            currency={trip.currency}
+            startDate={trip.start_date}
+            endDate={trip.end_date}
+            initialFlights={flights}
+            onExpensesChanged={refetchExpenses}
+            onFlightsChange={setFlightCount}
+          />
+        }
       />
 
       {/* Add expense button */}
@@ -380,16 +403,18 @@ export default function BudgetClient({
                   </span>
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-gray-800 truncate">{expense.description}</div>
-                    <div className="text-xs text-gray-400 mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                    <div className="text-xs text-gray-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                       <span>{expense.budget_categories?.name} · {format(parseISO(expense.date), 'dd/MM')}</span>
-                      {hasCompanion && (expense.paid_by || 'me') !== 'me' && (
-                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                          expense.paid_by === 'shared' ? 'bg-green-50 text-green-600' : 'bg-purple-50 text-purple-600'
-                        }`}>
+                      {hasCompanion && (
+                        <button
+                          onClick={() => cyclePayer(expense)}
+                          title="לחצי להחלפה: אישי / של השנייה / משותף"
+                          className={`px-1.5 py-0.5 rounded-full text-[10px] border transition hover:opacity-75 ${PAYER_TAG_STYLE[expense.paid_by || 'me']}`}
+                        >
                           {expense.paid_by === 'shared'
                             ? `👯 משותף${expense.shared_payer ? ` · שילמה ${PAYER_LABEL[expense.shared_payer]}` : ''}`
-                            : compName}
-                        </span>
+                            : PAYER_LABEL[expense.paid_by || 'me']}
+                        </button>
                       )}
                     </div>
                   </div>

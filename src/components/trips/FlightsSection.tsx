@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TripFlight } from '@/lib/types'
 import { format, parseISO } from 'date-fns'
@@ -13,6 +13,8 @@ export default function FlightsSection({
   endDate,
   initialFlights,
   onExpensesChanged,
+  onFlightsChange,
+  embedded = false,
 }: {
   tripId: string
   currency: string
@@ -20,6 +22,8 @@ export default function FlightsSection({
   endDate: string
   initialFlights: TripFlight[]
   onExpensesChanged?: () => void
+  onFlightsChange?: (count: number) => void
+  embedded?: boolean
 }) {
   const EMPTY_FORM = {
     from_location: '', to_location: '', flight_date: '', depart_time: '',
@@ -32,6 +36,11 @@ export default function FlightsSection({
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const supabase = createClient()
+
+  useEffect(() => {
+    onFlightsChange?.(flights.length)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flights.length])
 
   function startEdit(f: TripFlight) {
     setEditingId(f.id)
@@ -203,20 +212,8 @@ export default function FlightsSection({
     onExpensesChanged?.()
   }
 
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between">
-        <h2 className="font-semibold text-gray-700 flex items-center gap-2">
-          ✈️ טיסות פנים
-          <span className="text-sm font-normal text-gray-400">
-            ({flights.length}{totalPrice > 0 ? ` · ${totalPrice.toLocaleString()} ${currency}` : ''})
-          </span>
-        </h2>
-        <span className="text-gray-400 text-sm">{open ? '▲' : '▼'}</span>
-      </button>
-
-      {open && (
-        <div className="mt-4 space-y-3">
+  const body = (
+    <div className={embedded ? 'space-y-3' : 'mt-4 space-y-3'}>
           {flights.length === 0 && !showForm && (
             <p className="text-sm text-gray-400 italic">אין טיסות פנים עדיין</p>
           )}
@@ -298,8 +295,24 @@ export default function FlightsSection({
               + הוסיפי טיסה
             </button>
           )}
-        </div>
-      )}
+    </div>
+  )
+
+  // Embedded inside the budget planner's "טיסות פנים" category — no card of its own
+  if (embedded) return body
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between">
+        <h2 className="font-semibold text-gray-700 flex items-center gap-2">
+          ✈️ טיסות פנים
+          <span className="text-sm font-normal text-gray-400">
+            ({flights.length}{totalPrice > 0 ? ` · ${totalPrice.toLocaleString()} ${currency}` : ''})
+          </span>
+        </h2>
+        <span className="text-gray-400 text-sm">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && body}
     </div>
   )
 }

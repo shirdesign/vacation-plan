@@ -21,7 +21,11 @@ export default function NewTripForm() {
     total_budget: '',
     daily_budget: '',
     currency: 'USD',
+    traveler_name: '',
+    companion_name: '',
+    companion_budget: '',
   })
+  const [travelers, setTravelers] = useState<1 | 2>(1)
 
   function set(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -47,6 +51,9 @@ export default function NewTripForm() {
         total_budget: parseFloat(form.total_budget) || 0,
         daily_budget: parseFloat(form.daily_budget) || 0,
         currency: form.currency,
+        traveler_name: travelers === 2 ? form.traveler_name.trim() || null : null,
+        companion_name: travelers === 2 ? form.companion_name.trim() || null : null,
+        companion_budget: travelers === 2 ? parseFloat(form.companion_budget) || 0 : 0,
       })
       .select()
       .single()
@@ -131,6 +138,59 @@ export default function NewTripForm() {
         <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">תקציב</h2>
 
         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">התקציב מחולק בין כמה מטיילים?</label>
+          <div className="flex gap-2">
+            {([
+              { value: 1 as const, label: '👤 תקציב אחד' },
+              { value: 2 as const, label: '👯 שניים — כל אחד עם תקציב משלו' },
+            ]).map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTravelers(opt.value)}
+                className={`flex-1 text-sm px-3 py-2.5 rounded-xl border transition ${
+                  travelers === opt.value
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {travelers === 2 && (
+            <p className="text-xs text-gray-400 mt-1.5">
+              כל הוצאה תסומן של מי היא (או משותפת — מתחלקת חצי-חצי), כולל חישוב מי חייבת למי.
+            </p>
+          )}
+        </div>
+
+        {travelers === 2 && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">השם שלי *</label>
+              <input
+                value={form.traveler_name}
+                onChange={e => set('traveler_name', e.target.value)}
+                required
+                placeholder='למשל: "אוריה"'
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">שם השותף/ה לטיול *</label>
+              <input
+                value={form.companion_name}
+                onChange={e => set('companion_name', e.target.value)}
+                required
+                placeholder='למשל: "לירון"'
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        )}
+
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">מטבע</label>
           <select
             value={form.currency}
@@ -143,7 +203,9 @@ export default function NewTripForm() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">תקציב כולל</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {travelers === 2 ? `התקציב של ${form.traveler_name.trim() || 'שלי'}` : 'תקציב כולל'}
+            </label>
             <input
               type="number"
               value={form.total_budget}
@@ -153,17 +215,33 @@ export default function NewTripForm() {
               className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">תקציב יומי</label>
-            <input
-              type="number"
-              value={form.daily_budget}
-              onChange={e => set('daily_budget', e.target.value)}
-              min="0"
-              placeholder="0"
-              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          {travelers === 2 ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                התקציב של {form.companion_name.trim() || 'השותף/ה'}
+              </label>
+              <input
+                type="number"
+                value={form.companion_budget}
+                onChange={e => set('companion_budget', e.target.value)}
+                min="0"
+                placeholder="0"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">תקציב יומי</label>
+              <input
+                type="number"
+                value={form.daily_budget}
+                onChange={e => set('daily_budget', e.target.value)}
+                min="0"
+                placeholder="0"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
         </div>
 
         {error && <p className="text-red-500 text-sm">{error}</p>}

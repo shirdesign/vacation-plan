@@ -7,17 +7,24 @@ const ICONS = ['💰', '✈️', '🏨', '🍽️', '🎡', '🚌', '🛍️', '
 
 type CatWithSpent = BudgetCategory & { spent: number }
 
+const FLIGHTS_CATEGORY_NAME = 'טיסות פנים'
+
 export default function BudgetPlanner({
   tripId,
   currency,
   categories,
   onCategoriesChange,
+  flightsPanel,
+  flightsCount = 0,
 }: {
   tripId: string
   currency: string
   categories: CatWithSpent[]
   onCategoriesChange: (cats: BudgetCategory[]) => void
+  flightsPanel?: React.ReactNode
+  flightsCount?: number
 }) {
+  const [showFlights, setShowFlights] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [editingNameId, setEditingNameId] = useState<string | null>(null)
@@ -181,9 +188,37 @@ export default function BudgetPlanner({
                   />
                 </div>
               )}
+
+              {/* Flights live inside their budget category */}
+              {flightsPanel && cat.name === FLIGHTS_CATEGORY_NAME && (
+                <div className="mt-2">
+                  <button
+                    onClick={() => setShowFlights(s => !s)}
+                    className="w-full flex items-center justify-between text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-2 rounded-lg transition"
+                  >
+                    <span>✈️ הטיסות עצמן ({flightsCount})</span>
+                    <span>{showFlights ? '▲' : '▼'}</span>
+                  </button>
+                  {showFlights && <div className="mt-2">{flightsPanel}</div>}
+                </div>
+              )}
             </div>
           )
         })}
+
+        {/* No flights category yet — the first flight creates it, manage from here */}
+        {flightsPanel && !categories.some(c => c.name === FLIGHTS_CATEGORY_NAME) && (
+          <div className="py-3">
+            <button
+              onClick={() => setShowFlights(s => !s)}
+              className="w-full flex items-center justify-between text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-2 rounded-lg transition"
+            >
+              <span>✈️ טיסות פנים ({flightsCount}) — טיסה שהוזמנה נרשמת כהוצאה בקטגוריה</span>
+              <span>{showFlights ? '▲' : '▼'}</span>
+            </button>
+            {showFlights && <div className="mt-2">{flightsPanel}</div>}
+          </div>
+        )}
       </div>
 
       {/* Totals */}
