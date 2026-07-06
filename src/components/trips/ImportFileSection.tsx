@@ -39,7 +39,7 @@ export default function ImportFileSection({ onImport }: { onImport: (data: Impor
         const buf = await file.arrayBuffer()
         const result = await mammoth.extractRawText({ arrayBuffer: buf })
         extracted = extractFromText(result.value)
-      } else if (ext === 'csv') {
+      } else if (ext === 'csv' || ext === 'txt') {
         const text = await file.text()
         extracted = extractFromText(text)
       }
@@ -102,7 +102,7 @@ export default function ImportFileSection({ onImport }: { onImport: (data: Impor
         onClick={() => setOpen(true)}
         className="w-full border-2 border-dashed border-gray-300 rounded-xl py-4 text-gray-500 hover:border-blue-400 hover:text-blue-500 transition flex items-center justify-center gap-2"
       >
-        📎 ייבא מ-Excel / Word / CSV
+        📎 ייבא מ-Excel / Word / CSV / TXT
       </button>
     )
   }
@@ -115,13 +115,13 @@ export default function ImportFileSection({ onImport }: { onImport: (data: Impor
       </div>
 
       <p className="text-sm text-blue-700 mb-3">
-        העלי קובץ Excel, Word או CSV שמכיל מידע על הטיול — נזהה תאריכים, יעד ותקציב אוטומטית.
+        העלי קובץ Excel, Word, CSV או TXT שמכיל מידע על הטיול — נזהה תאריכים, יעד ותקציב אוטומטית.
       </p>
 
       <input
         ref={inputRef}
         type="file"
-        accept=".xlsx,.xls,.docx,.csv"
+        accept=".xlsx,.xls,.docx,.csv,.txt"
         onChange={handleFile}
         className="hidden"
       />

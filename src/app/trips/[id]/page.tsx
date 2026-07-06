@@ -9,6 +9,7 @@ import ChecklistSection from '@/components/trips/ChecklistSection'
 import TipsSection from '@/components/trips/TipsSection'
 import EmergencyContactsSection from '@/components/trips/EmergencyContactsSection'
 import PlanTripButton from '@/components/trips/PlanTripButton'
+import ImportPlanSection from '@/components/trips/ImportPlanSection'
 import TripMapSection from '@/components/map/TripMapSection'
 
 export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
@@ -42,23 +43,8 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const expRows = (expenses || []) as unknown as ExpenseRow[]
   const totalSpent = expRows.reduce((sum, e) => sum + Number(e.amount), 0)
   const fixedSpent = expRows.filter(e => e.budget_categories?.is_fixed).reduce((s, e) => s + Number(e.amount), 0)
-  const dailySpent = totalSpent - fixedSpent
 
-  // Two travelers: each has her own budget; shared expenses split 50/50
-  const hasCompanion = !!t.companion_name
-  const sumBy = (payer: string) => expRows.filter(e => (e.paid_by || 'me') === payer).reduce((s, e) => s + Number(e.amount), 0)
-  const sharedHalf = sumBy('shared') / 2
-  const travelers = hasCompanion
-    ? [
-        { name: t.traveler_name || 'אני', budget: t.total_budget, spent: sumBy('me') + sharedHalf, color: 'blue' },
-        { name: t.companion_name!, budget: Number(t.companion_budget || 0), spent: sumBy('companion') + sharedHalf, color: 'purple' },
-      ]
-    : []
-  const combinedBudget = t.total_budget + (hasCompanion ? Number(t.companion_budget || 0) : 0)
-  const remaining = combinedBudget - totalSpent
-  const spentPct = combinedBudget > 0 ? Math.min((totalSpent / combinedBudget) * 100, 100) : 0
-
-  // Daily budget math
+  // Days math — shared by all travelers
   const today = new Date()
   const todayStr = format(today, 'yyyy-MM-dd')
   const tripStarted = todayStr >= t.start_date
@@ -67,13 +53,38 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const daysLeft = tripEnded ? 0 : tripStarted
     ? differenceInDays(parseISO(t.end_date), today) + 1
     : days
-  const perDayLeft = daysLeft > 0 ? remaining / daysLeft : 0
   // Days elapsed including today
   const daysElapsed = tripStarted
     ? Math.min(differenceInDays(today, parseISO(t.start_date)) + 1, days)
     : 0
-  const avgDailyAll = daysElapsed > 0 ? totalSpent / daysElapsed : 0
-  const avgDailyOnly = daysElapsed > 0 ? dailySpent / daysElapsed : 0
+
+  // Two travelers: entirely separate budgets — summary, remaining-per-day and
+  // averages are each computed from her own expenses (+half of shared ones)
+  const hasCompanion = !!t.companion_name
+  const sumBy = (payer: string, onlyFixed = false) =>
+    expRows
+      .filter(e => (e.paid_by || 'me') === payer && (!onlyFixed || e.budget_categories?.is_fixed))
+      .reduce((s, e) => s + Number(e.amount), 0)
+
+  const budgetViews = (hasCompanion
+    ? [
+        { name: t.traveler_name || 'אני', budget: t.total_budget, spent: sumBy('me') + sumBy('shared') / 2, fixed: sumBy('me', true) + sumBy('shared', true) / 2, color: 'blue' },
+        { name: t.companion_name!, budget: Number(t.companion_budget || 0), spent: sumBy('companion') + sumBy('shared') / 2, fixed: sumBy('companion', true) + sumBy('shared', true) / 2, color: 'purple' },
+      ]
+    : [
+        { name: null as string | null, budget: t.total_budget, spent: totalSpent, fixed: fixedSpent, color: 'blue' },
+      ]
+  ).map(b => {
+    const remaining = b.budget - b.spent
+    return {
+      ...b,
+      remaining,
+      spentPct: b.budget > 0 ? Math.min((b.spent / b.budget) * 100, 100) : 0,
+      perDayLeft: daysLeft > 0 ? remaining / daysLeft : 0,
+      avgDailyAll: daysElapsed > 0 ? b.spent / daysElapsed : 0,
+      avgDailyOnly: daysElapsed > 0 ? (b.spent - b.fixed) / daysElapsed : 0,
+    }
+  })
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -99,70 +110,48 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
 
-        {/* Budget summary card */}
-        {t.total_budget > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
+        {/* Budget summary — with two travelers each gets her own complete card,
+            including remaining-per-day and daily averages from her numbers only */}
+        {(t.total_budget > 0 || hasCompanion) && budgetViews.map(b => (
+          <div
+            key={b.name || 'single'}
+            className={`bg-white rounded-2xl border p-5 mb-6 ${b.name ? (b.color === 'blue' ? 'border-blue-200' : 'border-purple-200') : 'border-gray-200'}`}
+          >
             <h2 className="font-semibold text-gray-700 mb-3">
-              סיכום תקציב{hasCompanion && <span className="text-sm font-normal text-gray-400"> · שתיהן ביחד</span>}
+              {b.name
+                ? <>💰 התקציב של <span className={b.color === 'blue' ? 'text-blue-700' : 'text-purple-700'}>{b.name}</span></>
+                : 'סיכום תקציב'}
+              {b.name && <span className="text-xs font-normal text-gray-400 mr-2">· כולל מחצית מההוצאות המשותפות</span>}
             </h2>
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div className="text-center">
-                <div className="text-xl font-bold text-gray-800">{combinedBudget.toLocaleString()}</div>
-                <div className="text-xs text-gray-500 mt-1">תקציב כולל ({t.currency})</div>
+                <div className="text-xl font-bold text-gray-800">{b.budget.toLocaleString()}</div>
+                <div className="text-xs text-gray-500 mt-1">תקציב ({t.currency})</div>
               </div>
               <div className="text-center">
-                <div className="text-xl font-bold text-orange-500">{totalSpent.toLocaleString()}</div>
+                <div className="text-xl font-bold text-orange-500">{b.spent.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                 <div className="text-xs text-gray-500 mt-1">הוצא עד כה</div>
               </div>
               <div className="text-center">
-                <div className={`text-xl font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  {remaining.toLocaleString()}
+                <div className={`text-xl font-bold ${b.remaining >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  {b.budget > 0 ? b.remaining.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
                 </div>
                 <div className="text-xs text-gray-500 mt-1">נשאר</div>
               </div>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-2">
               <div
-                className={`h-2 rounded-full transition-all ${spentPct > 90 ? 'bg-red-500' : spentPct > 70 ? 'bg-orange-400' : 'bg-green-500'}`}
-                style={{ width: `${spentPct}%` }}
+                className={`h-2 rounded-full transition-all ${b.spentPct > 90 ? 'bg-red-500' : b.spentPct > 70 ? 'bg-orange-400' : 'bg-green-500'}`}
+                style={{ width: `${b.spentPct}%` }}
               />
             </div>
-            <p className="text-xs text-gray-400 mt-1 text-left">{spentPct.toFixed(0)}% מהתקציב</p>
+            <p className="text-xs text-gray-400 mt-1 text-left">{b.spentPct.toFixed(0)}% מהתקציב</p>
 
-            {/* Per-traveler budgets — each has her own */}
-            {hasCompanion && (
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                {travelers.map(p => {
-                  const left = p.budget - p.spent
-                  const pct = p.budget > 0 ? Math.min((p.spent / p.budget) * 100, 100) : 0
-                  return (
-                    <div key={p.name} className={`rounded-xl p-3 ${p.color === 'blue' ? 'bg-blue-50' : 'bg-purple-50'}`}>
-                      <div className={`text-sm font-semibold mb-1 ${p.color === 'blue' ? 'text-blue-700' : 'text-purple-700'}`}>{p.name}</div>
-                      <div className="text-xs text-gray-600">
-                        הוציאה <strong>{p.spent.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong> מתוך {p.budget.toLocaleString()}
-                      </div>
-                      <div className={`text-xs font-medium ${left >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                        נשאר {left.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                      </div>
-                      {p.budget > 0 && (
-                        <div className="w-full bg-white rounded-full h-1.5 mt-1.5">
-                          <div
-                            className={`h-1.5 rounded-full ${pct > 90 ? 'bg-red-400' : p.color === 'blue' ? 'bg-blue-400' : 'bg-purple-400'}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Daily budget breakdown */}
+            {/* Daily budget breakdown — her own numbers */}
             <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
               <div className="bg-blue-50 rounded-xl p-3 text-center">
                 <div className="font-bold text-blue-700 text-lg">
-                  {daysLeft > 0 ? Math.floor(perDayLeft).toLocaleString() : '—'} {daysLeft > 0 && t.currency}
+                  {daysLeft > 0 && b.budget > 0 ? `${Math.floor(b.perDayLeft).toLocaleString()} ${t.currency}` : '—'}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   נשאר ליום · {daysLeft > 0 ? `${daysLeft} ימים ${tripStarted ? 'נותרו' : 'בטיול'}` : 'הטיול הסתיים'}
@@ -170,15 +159,15 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               </div>
               <div className="bg-orange-50 rounded-xl p-3 text-center">
                 <div className="font-bold text-orange-600 text-lg">
-                  {daysElapsed > 0 ? Math.round(avgDailyOnly).toLocaleString() + ' ' + t.currency : '—'}
+                  {daysElapsed > 0 ? Math.round(b.avgDailyOnly).toLocaleString() + ' ' + t.currency : '—'}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  {daysElapsed > 0 ? `ממוצע ליום · בלי טיסות וביטוח` : 'ממוצע יומי — הטיול טרם התחיל'}
+                  {daysElapsed > 0 ? 'ממוצע ליום · בלי טיסות וביטוח' : 'ממוצע יומי — הטיול טרם התחיל'}
                 </div>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 text-center">
                 <div className="font-bold text-gray-700 text-lg">
-                  {daysElapsed > 0 ? Math.round(avgDailyAll).toLocaleString() + ' ' + t.currency : '—'}
+                  {daysElapsed > 0 ? Math.round(b.avgDailyAll).toLocaleString() + ' ' + t.currency : '—'}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {daysElapsed > 0 ? `ממוצע ליום · כולל הכל (${daysElapsed} ימים)` : 'ממוצע כולל — הטיול טרם התחיל'}
@@ -186,7 +175,7 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
               </div>
             </div>
           </div>
-        )}
+        ))}
 
         {/* Navigation tabs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
@@ -225,6 +214,9 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
         {/* AI Trip Planner */}
         <PlanTripButton tripId={id} />
+
+        {/* Import an existing plan from a file */}
+        <ImportPlanSection tripId={id} tripStart={t.start_date} tripEnd={t.end_date} />
 
         {/* Pre-trip Checklist */}
         <ChecklistSection tripId={id} initialItems={checklist || []} />
