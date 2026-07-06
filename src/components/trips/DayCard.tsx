@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { TripDay, DayEvent, TripFlight } from '@/lib/types'
 import { format, parseISO } from 'date-fns'
 import EventItem from './EventItem'
@@ -24,6 +24,11 @@ export default function DayCard({
   onUpsertDay, onAddEvent, onUpdateEvent, onEventStatusChange, onDeleteEvent, onMoveEvent,
 }: DayCardProps) {
   const [expanded, setExpanded] = useState(startExpanded)
+
+  // Expand when jumped to from the calendar view
+  useEffect(() => {
+    if (startExpanded) setExpanded(true)
+  }, [startExpanded])
   const [editingLocation, setEditingLocation] = useState(false)
   const [locationName, setLocationName] = useState(day.location_name || '')
   const [editingTitle, setEditingTitle] = useState(false)

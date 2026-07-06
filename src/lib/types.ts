@@ -9,6 +9,9 @@ export type Trip = {
   total_budget: number
   daily_budget: number
   currency: string
+  traveler_name?: string
+  companion_name?: string
+  companion_budget: number
   share_token: string
   share_show_itinerary: boolean
   share_show_budget: boolean
@@ -109,6 +112,8 @@ export type PlaceActivity = {
   created_at: string
 }
 
+export type ExpensePayer = 'me' | 'companion' | 'shared'
+
 export type Expense = {
   id: string
   trip_id: string
@@ -119,7 +124,20 @@ export type Expense = {
   currency: string
   date: string
   notes?: string
+  paid_by: ExpensePayer
   created_at: string
   budget_categories?: BudgetCategory
   trip_days?: TripDay
+}
+
+export type TripKosherInfo = {
+  id: string
+  trip_id: string
+  location: string
+  category: string
+  title: string
+  details?: string
+  link?: string
+  sort_order: number
+  created_at: string
 }

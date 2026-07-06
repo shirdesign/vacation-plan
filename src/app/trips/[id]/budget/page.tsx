@@ -19,9 +19,10 @@ export default async function BudgetPage({ params }: { params: Promise<{ id: str
 
   if (!trip) notFound()
 
-  const [{ data: categories }, { data: expenses }] = await Promise.all([
+  const [{ data: categories }, { data: expenses }, { data: flights }] = await Promise.all([
     supabase.from('budget_categories').select('*').eq('trip_id', id).order('sort_order'),
     supabase.from('expenses').select('*, budget_categories(name, icon), trip_days(date)').eq('trip_id', id).order('date', { ascending: false }),
+    supabase.from('trip_flights').select('*').eq('trip_id', id).order('flight_date'),
   ])
 
   return (
@@ -39,6 +40,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ id: str
           trip={trip}
           initialCategories={categories || []}
           initialExpenses={expenses || []}
+          flights={flights || []}
         />
       </main>
     </div>

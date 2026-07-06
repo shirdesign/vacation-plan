@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { BudgetCategory, Expense } from '@/lib/types'
+import { BudgetCategory, Expense, ExpensePayer } from '@/lib/types'
 
 // Approximate rates to ILS — editable by the user per entry
 const RATES_TO_ILS: Record<string, number> = {
@@ -19,17 +19,22 @@ export default function AddExpenseForm({
   tripId,
   currency,
   categories,
+  travelerName,
+  companionName,
   onAdd,
   onCancel,
 }: {
   tripId: string
   currency: string
   categories: BudgetCategory[]
+  travelerName?: string
+  companionName?: string
   onAdd: (data: Omit<Expense, 'id' | 'created_at'>) => void
   onCancel: () => void
 }) {
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
+  const [paidBy, setPaidBy] = useState<ExpensePayer>('me')
   const [expCurrency, setExpCurrency] = useState(currency)
   const [rate, setRate] = useState<string>('')
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '')
@@ -50,6 +55,7 @@ export default function AddExpenseForm({
       amount: Math.round(converted * 100) / 100,
       currency,
       category_id: categoryId || null,
+      paid_by: paidBy,
       date,
       notes: [notes, isConverted ? `${amountNum} ${expCurrency} (שער ${effectiveRate})` : '']
         .filter(Boolean).join(' · ') || null,
@@ -101,6 +107,31 @@ export default function AddExpenseForm({
               className="w-20 border border-gray-200 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
             />
           </label>
+        </div>
+      )}
+
+      {/* Who paid — only for two-traveler trips */}
+      {companionName && (
+        <div className="flex items-center gap-1.5 text-sm">
+          <span className="text-xs text-gray-500 ml-1">מי שילמה?</span>
+          {([
+            { value: 'me' as ExpensePayer, label: travelerName || 'אני' },
+            { value: 'companion' as ExpensePayer, label: companionName },
+            { value: 'shared' as ExpensePayer, label: '👯 משותף' },
+          ]).map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setPaidBy(opt.value)}
+              className={`text-xs px-2.5 py-1.5 rounded-full border transition ${
+                paidBy === opt.value
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       )}
 

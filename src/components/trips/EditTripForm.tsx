@@ -21,6 +21,9 @@ export default function EditTripForm({ trip, plannedDates }: { trip: Trip; plann
     total_budget: String(trip.total_budget || ''),
     daily_budget: String(trip.daily_budget || ''),
     currency: trip.currency,
+    traveler_name: trip.traveler_name || '',
+    companion_name: trip.companion_name || '',
+    companion_budget: String(trip.companion_budget || ''),
   })
 
   function set(field: string, value: string) {
@@ -53,6 +56,9 @@ export default function EditTripForm({ trip, plannedDates }: { trip: Trip; plann
         total_budget: parseFloat(form.total_budget) || 0,
         daily_budget: parseFloat(form.daily_budget) || 0,
         currency: form.currency,
+        traveler_name: form.traveler_name.trim() || null,
+        companion_name: form.companion_name.trim() || null,
+        companion_budget: parseFloat(form.companion_budget) || 0,
       })
       .eq('id', trip.id)
 
@@ -176,6 +182,47 @@ export default function EditTripForm({ trip, plannedDates }: { trip: Trip; plann
           />
         </div>
       </div>
+
+      <hr className="border-gray-100" />
+      <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">טיול עם חבר/ה</h2>
+      <p className="text-xs text-gray-400 -mt-3">
+        אם מטיילים בשניים עם תקציבים נפרדים — כל הוצאה תסומן של מי היא, והוצאות משותפות יתחלקו חצי-חצי.
+      </p>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">השם שלי</label>
+          <input
+            value={form.traveler_name}
+            onChange={e => set('traveler_name', e.target.value)}
+            placeholder='למשל: "אוריה"'
+            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">שם החבר/ה</label>
+          <input
+            value={form.companion_name}
+            onChange={e => set('companion_name', e.target.value)}
+            placeholder="ריק = טיול של אחד"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
+      {form.companion_name.trim() && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">התקציב של {form.companion_name.trim()}</label>
+          <input
+            type="number"
+            value={form.companion_budget}
+            onChange={e => set('companion_budget', e.target.value)}
+            min="0"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-gray-400 mt-1">״תקציב כולל״ למעלה הוא התקציב שלך; זה התקציב הנפרד של {form.companion_name.trim()}.</p>
+        </div>
+      )}
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 

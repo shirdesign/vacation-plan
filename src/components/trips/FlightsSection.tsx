@@ -12,12 +12,14 @@ export default function FlightsSection({
   startDate,
   endDate,
   initialFlights,
+  onExpensesChanged,
 }: {
   tripId: string
   currency: string
   startDate: string
   endDate: string
   initialFlights: TripFlight[]
+  onExpensesChanged?: () => void
 }) {
   const EMPTY_FORM = {
     from_location: '', to_location: '', flight_date: '', depart_time: '',
@@ -148,6 +150,7 @@ export default function FlightsSection({
           }
         }
         setFlights(prev => prev.map(x => x.id === editingId ? f : x).sort((a, b) => a.flight_date.localeCompare(b.flight_date)))
+        onExpensesChanged?.()
         closeForm()
       }
     } else {
@@ -167,6 +170,7 @@ export default function FlightsSection({
           }
         }
         setFlights(prev => [...prev, f].sort((a, b) => a.flight_date.localeCompare(b.flight_date)))
+        onExpensesChanged?.()
         closeForm()
       }
     }
@@ -186,6 +190,7 @@ export default function FlightsSection({
 
     await supabase.from('trip_flights').update({ is_booked: nowBooked, expense_id: expenseId }).eq('id', flight.id)
     setFlights(prev => prev.map(f => f.id === flight.id ? { ...f, is_booked: nowBooked, expense_id: expenseId || undefined } : f))
+    onExpensesChanged?.()
   }
 
   async function deleteFlight(flight: TripFlight) {
@@ -195,6 +200,7 @@ export default function FlightsSection({
     }
     await supabase.from('trip_flights').delete().eq('id', flight.id)
     setFlights(prev => prev.filter(f => f.id !== flight.id))
+    onExpensesChanged?.()
   }
 
   return (

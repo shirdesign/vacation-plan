@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Trip, TripDay, DayEvent, TripFlight } from '@/lib/types'
 import { geocodeLocation } from '@/lib/geocode'
@@ -19,8 +19,22 @@ export default function ItineraryClient({
 }) {
   const [days, setDays] = useState<DayWithEvents[]>(initialDays)
   const [view, setView] = useState<'list' | 'calendar'>('list')
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [focusDate, setFocusDate] = useState<string | null>(null)
   const supabase = createClient()
+
+  // Tapping a calendar day jumps straight to that day in the list
+  function jumpToDay(date: string) {
+    setFocusDate(date)
+    setView('list')
+  }
+
+  useEffect(() => {
+    if (view === 'list' && focusDate) {
+      requestAnimationFrame(() => {
+        document.getElementById(`day-${focusDate}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
+  }, [view, focusDate])
 
   const allDates = days.map(d => d.date)
 
@@ -135,25 +149,23 @@ export default function ItineraryClient({
     })
   }
 
-  const selectedDay = selectedDate ? days.find(d => d.date === selectedDate) : null
-  const selectedIdx = selectedDate ? days.findIndex(d => d.date === selectedDate) : -1
-
-  function renderDayCard(day: DayWithEvents, idx: number, startExpanded = false) {
+  function renderDayCard(day: DayWithEvents, idx: number) {
     return (
-      <DayCard
-        key={day.date}
-        day={day}
-        dayNumber={idx + 1}
-        allDates={allDates}
-        flights={flights.filter(f => f.flight_date === day.date)}
-        startExpanded={startExpanded}
-        onUpsertDay={upsertDay}
-        onAddEvent={addEvent}
-        onUpdateEvent={updateEvent}
-        onEventStatusChange={updateEventStatus}
-        onDeleteEvent={deleteEvent}
-        onMoveEvent={moveEvent}
-      />
+      <div key={day.date} id={`day-${day.date}`} className="scroll-mt-4">
+        <DayCard
+          day={day}
+          dayNumber={idx + 1}
+          allDates={allDates}
+          flights={flights.filter(f => f.flight_date === day.date)}
+          startExpanded={day.date === focusDate}
+          onUpsertDay={upsertDay}
+          onAddEvent={addEvent}
+          onUpdateEvent={updateEvent}
+          onEventStatusChange={updateEventStatus}
+          onDeleteEvent={deleteEvent}
+          onMoveEvent={moveEvent}
+        />
+      </div>
     )
   }
 
@@ -181,17 +193,15 @@ export default function ItineraryClient({
         </div>
       ) : (
         <div className="space-y-4">
+          <p className="text-sm text-gray-400 text-center">לחצי על יום בלוח — ותקפצי ישר אליו במסלול</p>
           <TripCalendar
             days={days}
             startDate={trip.start_date}
             endDate={trip.end_date}
             flights={flights}
-            selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
+            selectedDate={focusDate}
+            onSelectDate={jumpToDay}
           />
-          {selectedDay
-            ? renderDayCard(selectedDay, selectedIdx, true)
-            : <p className="text-sm text-gray-400 text-center">לחצי על יום בלוח כדי לערוך אותו</p>}
         </div>
       )}
     </div>

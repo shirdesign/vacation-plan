@@ -2,14 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import NavBar from '@/components/ui/NavBar'
-import { Trip, TripDay, TripFlight } from '@/lib/types'
+import { Trip, TripDay } from '@/lib/types'
 import { format, parseISO, differenceInDays } from 'date-fns'
 import ShareButton from '@/components/trips/ShareButton'
 import ChecklistSection from '@/components/trips/ChecklistSection'
 import TipsSection from '@/components/trips/TipsSection'
 import EmergencyContactsSection from '@/components/trips/EmergencyContactsSection'
 import PlanTripButton from '@/components/trips/PlanTripButton'
-import FlightsSection from '@/components/trips/FlightsSection'
 import TripMapSection from '@/components/map/TripMapSection'
 
 export default async function TripPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,12 +30,11 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
   const days = differenceInDays(parseISO(t.end_date), parseISO(t.start_date)) + 1
 
   // Get total spent
-  const [{ data: expenses }, { data: checklist }, { data: tips }, { data: contacts }, { data: flights }, { data: tripDays }] = await Promise.all([
+  const [{ data: expenses }, { data: checklist }, { data: tips }, { data: contacts }, { data: tripDays }] = await Promise.all([
     supabase.from('expenses').select('amount, date, budget_categories(is_fixed)').eq('trip_id', id),
     supabase.from('trip_checklists').select('*').eq('trip_id', id).order('sort_order'),
     supabase.from('trip_tips').select('*').eq('trip_id', id).order('location').order('sort_order'),
     supabase.from('trip_emergency_contacts').select('*').eq('trip_id', id).order('sort_order'),
-    supabase.from('trip_flights').select('*').eq('trip_id', id).order('flight_date'),
     supabase.from('trip_days').select('*').eq('trip_id', id).order('date'),
   ])
 
@@ -148,48 +146,32 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
         )}
 
         {/* Navigation tabs */}
-        <div className="flex gap-2 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
           <Link
             href={`/trips/${id}/itinerary`}
-            className="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition"
+            className="text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition"
           >
             🗓️ מסלול יומי
           </Link>
           <Link
             href={`/trips/${id}/budget`}
-            className="flex-1 text-center bg-white border border-gray-200 hover:border-blue-300 text-gray-700 font-semibold py-3 rounded-xl transition"
+            className="text-center bg-white border border-gray-200 hover:border-blue-300 text-gray-700 font-semibold py-3 rounded-xl transition"
           >
-            💰 תקציב והוצאות
+            💰 תקציב
           </Link>
           <Link
             href={`/trips/${id}/places`}
-            className="flex-1 text-center bg-white border border-gray-200 hover:border-blue-300 text-gray-700 font-semibold py-3 rounded-xl transition"
+            className="text-center bg-white border border-gray-200 hover:border-blue-300 text-gray-700 font-semibold py-3 rounded-xl transition"
           >
             📍 מקומות
           </Link>
+          <Link
+            href={`/trips/${id}/kosher`}
+            className="text-center bg-white border border-gray-200 hover:border-blue-300 text-gray-700 font-semibold py-3 rounded-xl transition"
+          >
+            🔯 כשר ב...
+          </Link>
         </div>
-
-        {/* Route map — pass only the fields the map renders */}
-        <TripMapSection
-          days={((tripDays || []) as TripDay[]).map(d => ({
-            id: d.id,
-            date: d.date,
-            title: d.title,
-            location_name: d.location_name,
-            location_lat: d.location_lat,
-            location_lng: d.location_lng,
-          }))}
-          editable
-        />
-
-        {/* Domestic flights */}
-        <FlightsSection
-          tripId={id}
-          currency={t.currency}
-          startDate={t.start_date}
-          endDate={t.end_date}
-          initialFlights={(flights || []) as TripFlight[]}
-        />
 
         {t.description && (
           <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
@@ -203,6 +185,19 @@ export default async function TripPage({ params }: { params: Promise<{ id: strin
 
         {/* Pre-trip Checklist */}
         <ChecklistSection tripId={id} initialItems={checklist || []} />
+
+        {/* Route map — pass only the fields the map renders */}
+        <TripMapSection
+          days={((tripDays || []) as TripDay[]).map(d => ({
+            id: d.id,
+            date: d.date,
+            title: d.title,
+            location_name: d.location_name,
+            location_lat: d.location_lat,
+            location_lng: d.location_lng,
+          }))}
+          editable
+        />
 
         {/* Tips & Recommendations */}
         <TipsSection tripId={id} initialTips={tips || []} />
