@@ -125,6 +125,7 @@ export type Expense = {
   date: string
   notes?: string
   paid_by: ExpensePayer
+  shared_payer?: 'me' | 'companion' | null
   created_at: string
   budget_categories?: BudgetCategory
   trip_days?: TripDay

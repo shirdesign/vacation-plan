@@ -35,6 +35,7 @@ export default function AddExpenseForm({
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [paidBy, setPaidBy] = useState<ExpensePayer>('me')
+  const [sharedPayer, setSharedPayer] = useState<'me' | 'companion' | null>(null)
   const [expCurrency, setExpCurrency] = useState(currency)
   const [rate, setRate] = useState<string>('')
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '')
@@ -56,6 +57,7 @@ export default function AddExpenseForm({
       currency,
       category_id: categoryId || null,
       paid_by: paidBy,
+      shared_payer: paidBy === 'shared' ? sharedPayer : null,
       date,
       notes: [notes, isConverted ? `${amountNum} ${expCurrency} (שער ${effectiveRate})` : '']
         .filter(Boolean).join(' · ') || null,
@@ -132,6 +134,34 @@ export default function AddExpenseForm({
               {opt.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* For a shared expense: who fronted the money (for settling up later) */}
+      {companionName && paidBy === 'shared' && (
+        <div className="flex flex-wrap items-center gap-1.5 text-sm bg-white rounded-lg border border-orange-200 px-2.5 py-2">
+          <span className="text-xs text-gray-500 ml-1">מי הוציאה את הכסף?</span>
+          {([
+            { value: null, label: 'חצי-חצי' },
+            { value: 'me' as const, label: travelerName || 'אני' },
+            { value: 'companion' as const, label: companionName },
+          ]).map(opt => (
+            <button
+              key={String(opt.value)}
+              type="button"
+              onClick={() => setSharedPayer(opt.value)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                sharedPayer === opt.value
+                  ? 'bg-green-600 text-white border-green-600'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-green-300'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+          {sharedPayer && (
+            <span className="text-[10px] text-gray-400 w-full">💸 החצי של השנייה יופיע בחישוב &quot;מי חייבת למי&quot;</span>
+          )}
         </div>
       )}
 

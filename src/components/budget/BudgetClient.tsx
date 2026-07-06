@@ -23,7 +23,7 @@ export default function BudgetClient({
   const [showAdd, setShowAdd] = useState(false)
   const [filterCat, setFilterCat] = useState<string>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ description: '', amount: '', date: '', category_id: '', paid_by: 'me' as ExpensePayer })
+  const [editForm, setEditForm] = useState({ description: '', amount: '', date: '', category_id: '', paid_by: 'me' as ExpensePayer, shared_payer: null as 'me' | 'companion' | null })
   const supabase = createClient()
 
   const meName = trip.traveler_name || 'אני'
@@ -53,6 +53,7 @@ export default function BudgetClient({
       date: e.date,
       category_id: e.category_id || '',
       paid_by: e.paid_by || 'me',
+      shared_payer: e.shared_payer || null,
     })
   }
 
@@ -66,6 +67,7 @@ export default function BudgetClient({
         date: editForm.date,
         category_id: editForm.category_id || null,
         paid_by: editForm.paid_by,
+        shared_payer: editForm.paid_by === 'shared' ? editForm.shared_payer : null,
       })
       .eq('id', editingId)
       .select('*, budget_categories(name, icon), trip_days(date)')
@@ -82,6 +84,16 @@ export default function BudgetClient({
   const sharedSpent = spentBy('shared')
   const meSpent = spentBy('me') + sharedSpent / 2
   const compSpent = spentBy('companion') + sharedSpent / 2
+
+  // Settling up: when one traveler fronted a shared expense, the other owes her half.
+  // shared_payer=null means they split at the register — no debt.
+  const owedToMe = expenses
+    .filter(e => e.paid_by === 'shared' && e.shared_payer === 'me')
+    .reduce((s, e) => s + Number(e.amount) / 2, 0)
+  const owedToComp = expenses
+    .filter(e => e.paid_by === 'shared' && e.shared_payer === 'companion')
+    .reduce((s, e) => s + Number(e.amount) / 2, 0)
+  const settleNet = owedToMe - owedToComp // >0: companion owes me
 
   const combinedBudget = trip.total_budget + (hasCompanion ? Number(trip.companion_budget || 0) : 0)
   const remaining = combinedBudget - totalSpent
@@ -195,6 +207,19 @@ export default function BudgetClient({
               )
             })}
           </div>
+          {/* Who owes whom */}
+          <div className={`mt-3 rounded-xl px-4 py-3 text-sm font-medium text-center ${
+            settleNet === 0 ? 'bg-gray-50 text-gray-500' : 'bg-amber-50 text-amber-700 border border-amber-200'
+          }`}>
+            {settleNet === 0
+              ? '💸 מאוזנות — אף אחת לא חייבת כלום'
+              : settleNet > 0
+                ? <>💸 <strong>{compName}</strong> חייבת ל<strong>{meName}</strong> {Math.abs(settleNet).toLocaleString(undefined, { maximumFractionDigits: 0 })} {trip.currency}</>
+                : <>💸 <strong>{meName}</strong> חייבת ל<strong>{compName}</strong> {Math.abs(settleNet).toLocaleString(undefined, { maximumFractionDigits: 0 })} {trip.currency}</>}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1.5 text-center">
+            החישוב לפי הוצאות משותפות שאחת מכן שילמה לבד (בהוצאה משותפת מסמנים מי הוציאה את הכסף)
+          </p>
           {Number(trip.companion_budget || 0) === 0 && (
             <p className="text-xs text-gray-400 mt-3">💡 אפשר להגדיר תקציב ל{compName} בעמוד עריכת הטיול</p>
           )}
@@ -302,7 +327,7 @@ export default function BudgetClient({
                     </select>
                   </div>
                   {hasCompanion && (
-                    <div className="flex gap-1.5">
+                    <div className="flex flex-wrap gap-1.5">
                       {(['me', 'companion', 'shared'] as ExpensePayer[]).map(p => (
                         <button
                           key={p}
@@ -315,6 +340,29 @@ export default function BudgetClient({
                           }`}
                         >
                           {p === 'shared' ? '👯 משותף' : PAYER_LABEL[p]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {hasCompanion && editForm.paid_by === 'shared' && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-gray-500">מי הוציאה את הכסף?</span>
+                      {([
+                        { value: null, label: 'חצי-חצי' },
+                        { value: 'me' as const, label: meName },
+                        { value: 'companion' as const, label: compName! },
+                      ]).map(opt => (
+                        <button
+                          key={String(opt.value)}
+                          type="button"
+                          onClick={() => setEditForm(f => ({ ...f, shared_payer: opt.value }))}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                            editForm.shared_payer === opt.value
+                              ? 'bg-green-600 text-white border-green-600'
+                              : 'bg-white border-gray-200 text-gray-600'
+                          }`}
+                        >
+                          {opt.label}
                         </button>
                       ))}
                     </div>
@@ -338,7 +386,9 @@ export default function BudgetClient({
                         <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                           expense.paid_by === 'shared' ? 'bg-green-50 text-green-600' : 'bg-purple-50 text-purple-600'
                         }`}>
-                          {expense.paid_by === 'shared' ? '👯 משותף' : compName}
+                          {expense.paid_by === 'shared'
+                            ? `👯 משותף${expense.shared_payer ? ` · שילמה ${PAYER_LABEL[expense.shared_payer]}` : ''}`
+                            : compName}
                         </span>
                       )}
                     </div>
