@@ -124,6 +124,7 @@ export type Expense = {
   amount: number
   currency: string
   date: string
+  time?: string | null
   notes?: string
   paid_by: ExpensePayer
   shared_payer?: 'me' | 'companion' | null

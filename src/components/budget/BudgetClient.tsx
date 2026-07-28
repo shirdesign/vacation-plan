@@ -25,7 +25,7 @@ export default function BudgetClient({
   const [filterCat, setFilterCat] = useState<string>('all')
   const [filterPayer, setFilterPayer] = useState<'all' | ExpensePayer>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ description: '', amount: '', date: '', category_id: '', paid_by: 'me' as ExpensePayer, shared_payer: null as 'me' | 'companion' | null })
+  const [editForm, setEditForm] = useState({ description: '', amount: '', date: '', time: '', category_id: '', paid_by: 'me' as ExpensePayer, shared_payer: null as 'me' | 'companion' | null })
   const [person, setPerson] = useState<'me' | 'companion'>('me')
   const supabase = createClient()
 
@@ -46,7 +46,8 @@ export default function BudgetClient({
         .from('expenses')
         .select('*, budget_categories(name, icon), trip_days(date)')
         .eq('trip_id', trip.id)
-        .order('date', { ascending: false }),
+        .order('date', { ascending: false })
+        .order('time', { ascending: false, nullsFirst: false }),
       supabase.from('budget_categories').select('*').eq('trip_id', trip.id).order('sort_order'),
     ])
     if (exp) setExpenses(exp as Expense[])
@@ -59,6 +60,7 @@ export default function BudgetClient({
       description: e.description,
       amount: String(e.amount),
       date: e.date,
+      time: e.time?.slice(0, 5) || '',
       category_id: e.category_id || '',
       paid_by: e.paid_by || 'me',
       shared_payer: e.shared_payer || null,
@@ -73,6 +75,7 @@ export default function BudgetClient({
         description: editForm.description || 'הוצאה',
         amount: parseFloat(editForm.amount) || 0,
         date: editForm.date,
+        time: editForm.time || null,
         category_id: editForm.category_id || null,
         paid_by: editForm.paid_by,
         shared_payer: editForm.paid_by === 'shared' ? editForm.shared_payer : null,
@@ -132,6 +135,20 @@ export default function BudgetClient({
   const totalPlanned = categories.reduce((s, c) => s + Number(c[plannedKey] || 0), 0)
 
   async function addExpense(data: Omit<Expense, 'id' | 'created_at'>) {
+    // Guard against accidental duplicates: same amount on the same date is
+    // almost always a double-entry. Ask before adding a second one.
+    const dup = expenses.find(
+      e => Number(e.amount) === Number(data.amount) && e.date === data.date,
+    )
+    if (dup) {
+      const ok = window.confirm(
+        `כבר רשומה הוצאה של ${Number(dup.amount).toLocaleString()} ${dup.currency} בתאריך ${format(parseISO(dup.date), 'dd/MM')} ("${dup.description}").\nלהוסיף הוצאה נוספת בכל זאת?`,
+      )
+      if (!ok) {
+        setShowAdd(false)
+        return
+      }
+    }
     const { data: exp } = await supabase
       .from('expenses')
       .insert({ ...data, trip_id: trip.id })
@@ -146,21 +163,21 @@ export default function BudgetClient({
     setExpenses(prev => prev.filter(e => e.id !== id))
   }
 
-  // One tap on an expense's tag cycles: mine → hers → shared
-  async function cyclePayer(e: Expense) {
-    const order: ExpensePayer[] = ['me', 'companion', 'shared']
-    const next = order[(order.indexOf(e.paid_by || 'me') + 1) % order.length]
-    await supabase.from('expenses').update({ paid_by: next, shared_payer: null }).eq('id', e.id)
-    setExpenses(prev => prev.map(x => x.id === e.id ? { ...x, paid_by: next, shared_payer: null } : x))
-  }
-
   const PAYER_TAG_STYLE: Record<ExpensePayer, string> = {
     me: 'bg-blue-50 text-blue-600 border-blue-200',
     companion: 'bg-purple-50 text-purple-600 border-purple-200',
     shared: 'bg-green-50 text-green-600 border-green-200',
   }
 
-  const filtered = expenses
+  // Newest day first; within a day, later time first (falls back to entry order)
+  const sortedExpenses = [...expenses].sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date)
+    const at = a.time || '', bt = b.time || ''
+    if (at !== bt) return bt.localeCompare(at)
+    return (b.created_at || '').localeCompare(a.created_at || '')
+  })
+
+  const filtered = sortedExpenses
     .filter(e => filterCat === 'all' || e.category_id === filterCat)
     .filter(e => filterPayer === 'all' || (e.paid_by || 'me') === filterPayer)
 
@@ -393,6 +410,14 @@ export default function BudgetClient({
                       onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
                       className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
+                    <input
+                      type="time"
+                      value={editForm.time}
+                      onChange={e => setEditForm(f => ({ ...f, time: e.target.value }))}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
                     <select
                       value={editForm.category_id}
                       onChange={e => setEditForm(f => ({ ...f, category_id: e.target.value }))}
@@ -459,17 +484,18 @@ export default function BudgetClient({
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-gray-800 truncate">{expense.description}</div>
                     <div className="text-xs text-gray-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                      <span>{expense.budget_categories?.name} · {format(parseISO(expense.date), 'dd/MM')}</span>
+                      <span>
+                        {expense.budget_categories?.name} · {format(parseISO(expense.date), 'dd/MM')}
+                        {expense.time ? ` · ${expense.time.slice(0, 5)}` : ''}
+                      </span>
                       {hasCompanion && (
-                        <button
-                          onClick={() => cyclePayer(expense)}
-                          title="לחצי להחלפה: אישי / של השנייה / משותף"
-                          className={`px-1.5 py-0.5 rounded-full text-[10px] border transition hover:opacity-75 ${PAYER_TAG_STYLE[expense.paid_by || 'me']}`}
+                        <span
+                          className={`px-1.5 py-0.5 rounded-full text-[10px] border ${PAYER_TAG_STYLE[expense.paid_by || 'me']}`}
                         >
                           {expense.paid_by === 'shared'
                             ? `👯 משותף${expense.shared_payer ? ` · שילמה ${PAYER_LABEL[expense.shared_payer]}` : ''}`
                             : PAYER_LABEL[expense.paid_by || 'me']}
-                        </button>
+                        </span>
                       )}
                     </div>
                   </div>

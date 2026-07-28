@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { BudgetCategory, Expense, ExpensePayer } from '@/lib/types'
 
 // Approximate rates to ILS — editable by the user per entry
@@ -31,7 +31,7 @@ export default function AddExpenseForm({
   travelerName?: string
   companionName?: string
   defaultPayer?: ExpensePayer
-  onAdd: (data: Omit<Expense, 'id' | 'created_at'>) => void
+  onAdd: (data: Omit<Expense, 'id' | 'created_at'>) => void | Promise<void>
   onCancel: () => void
 }) {
   const [description, setDescription] = useState('')
@@ -42,28 +42,42 @@ export default function AddExpenseForm({
   const [rate, setRate] = useState<string>('')
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 5))
   const [notes, setNotes] = useState('')
   const [showMore, setShowMore] = useState(false)
+  const submittingRef = useRef(false)
+  const [submitting, setSubmitting] = useState(false)
 
   const effectiveRate = rate !== '' ? parseFloat(rate) || 0 : (RATES_TO_ILS[expCurrency] ?? 1)
   const amountNum = parseFloat(amount) || 0
   const converted = expCurrency === currency ? amountNum : amountNum * effectiveRate
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault()
+    // Block a second submit while the first insert is still in flight — this is
+    // what stops the sub-second double-tap duplicates the confirm popup can't catch.
+    if (submittingRef.current) return
+    submittingRef.current = true
+    setSubmitting(true)
     const isConverted = expCurrency !== currency
-    onAdd({
-      trip_id: tripId,
-      description: description || categories.find(c => c.id === categoryId)?.name || 'הוצאה',
-      amount: Math.round(converted * 100) / 100,
-      currency,
-      category_id: categoryId || null,
-      paid_by: paidBy,
-      shared_payer: paidBy === 'shared' ? sharedPayer : null,
-      date,
-      notes: [notes, isConverted ? `${amountNum} ${expCurrency} (שער ${effectiveRate})` : '']
-        .filter(Boolean).join(' · ') || null,
-    } as unknown as Omit<Expense, 'id' | 'created_at'>)
+    try {
+      await onAdd({
+        trip_id: tripId,
+        description: description || categories.find(c => c.id === categoryId)?.name || 'הוצאה',
+        amount: Math.round(converted * 100) / 100,
+        currency,
+        category_id: categoryId || null,
+        paid_by: paidBy,
+        shared_payer: paidBy === 'shared' ? sharedPayer : null,
+        date,
+        time: time || null,
+        notes: [notes, isConverted ? `${amountNum} ${expCurrency} (שער ${effectiveRate})` : '']
+          .filter(Boolean).join(' · ') || null,
+      } as unknown as Omit<Expense, 'id' | 'created_at'>)
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -194,12 +208,20 @@ export default function AddExpenseForm({
             placeholder="תיאור (ברירת מחדל: שם הקטגוריה)"
             className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
-          <input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            />
+            <input
+              type="time"
+              value={time}
+              onChange={e => setTime(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            />
+          </div>
           <input
             value={notes}
             onChange={e => setNotes(e.target.value)}
@@ -209,13 +231,13 @@ export default function AddExpenseForm({
         </div>
       ) : (
         <button type="button" onClick={() => setShowMore(true)} className="text-xs text-orange-600 hover:underline">
-          + תיאור / תאריך / הערות
+          + תיאור / תאריך / שעה / הערות
         </button>
       )}
 
       <div className="flex gap-2 pt-1">
-        <button type="submit" disabled={!amountNum} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl transition text-sm disabled:opacity-50">
-          הוסיפי הוצאה
+        <button type="submit" disabled={!amountNum || submitting} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl transition text-sm disabled:opacity-50">
+          {submitting ? 'שומר...' : 'הוסיפי הוצאה'}
         </button>
         <button type="button" onClick={onCancel} className="px-4 py-2.5 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition text-sm">
           ביטול
