@@ -134,6 +134,11 @@ export default function BudgetClient({
 
   const totalPlanned = categories.reduce((s, c) => s + Number(c[plannedKey] || 0), 0)
 
+  // Half a traveler's budget is well above any single real expense (the flights,
+  // the priciest line so far, are a sixth of it) — anything bigger is worth a
+  // second look before it lands in the totals.
+  const warnAbove = Math.max(trip.total_budget, Number(trip.companion_budget || 0)) / 2
+
   async function addExpense(data: Omit<Expense, 'id' | 'created_at'>) {
     // Guard against accidental duplicates: same amount on the same date is
     // almost always a double-entry. Ask before adding a second one.
@@ -332,6 +337,7 @@ export default function BudgetClient({
           travelerName={meName}
           companionName={compName}
           defaultPayer={hasCompanion ? person : 'me'}
+          warnAbove={warnAbove}
           onAdd={addExpense}
           onCancel={() => setShowAdd(false)}
         />

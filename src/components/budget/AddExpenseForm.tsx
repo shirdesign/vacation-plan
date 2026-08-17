@@ -22,6 +22,7 @@ export default function AddExpenseForm({
   travelerName,
   companionName,
   defaultPayer = 'me',
+  warnAbove = 0,
   onAdd,
   onCancel,
 }: {
@@ -31,6 +32,8 @@ export default function AddExpenseForm({
   travelerName?: string
   companionName?: string
   defaultPayer?: ExpensePayer
+  /** Ask for confirmation above this amount (in trip currency). 0 disables the check. */
+  warnAbove?: number
   onAdd: (data: Omit<Expense, 'id' | 'created_at'>) => void | Promise<void>
   onCancel: () => void
 }) {
@@ -57,6 +60,22 @@ export default function AddExpenseForm({
     // Block a second submit while the first insert is still in flight — this is
     // what stops the sub-second double-tap duplicates the confirm popup can't catch.
     if (submittingRef.current) return
+    // A sum far above anything else in this trip is almost always a currency
+    // slip — the amount typed in ฿/₫ while the selector stayed on the trip
+    // currency. Ask before saving, and name the likely conversion.
+    if (warnAbove > 0 && converted > warnAbove) {
+      const hints = Object.entries(RATES_TO_ILS)
+        .filter(([c]) => c !== currency && amountNum * RATES_TO_ILS[c] < warnAbove)
+        .map(([c, r]) => `${CURRENCY_SYMBOLS[c]} ${c} → ${(amountNum * r).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}`)
+      const ok = window.confirm(
+        `${converted.toLocaleString()} ${currency} זה סכום חריג לטיול הזה.\n` +
+        (expCurrency === currency && hints.length
+          ? `אם הזנת במטבע מקומי, בחרי אותו בבורר המטבע:\n${hints.join('\n')}\n\n`
+          : '\n') +
+        'לשמור בכל זאת?',
+      )
+      if (!ok) return
+    }
     submittingRef.current = true
     setSubmitting(true)
     const isConverted = expCurrency !== currency

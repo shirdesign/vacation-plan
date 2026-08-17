@@ -28,6 +28,24 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   const tipLocations = [...new Set(tips.map(tip => tip.location))]
 
   const totalSpent = (expenses || []).reduce((s: number, e: Expense) => s + Number(e.amount), 0)
+
+  // A two-traveler trip has two separate budgets — comparing the joint spending
+  // to one of them alone reads as a huge overdraft. Split it the same way the
+  // budget tab does: own expenses + half of every shared one.
+  const companionName = t.companion_name
+  const hasCompanion = !!companionName
+  const companionBudget = Number(t.companion_budget || 0)
+  const spentBy = (payer: string) =>
+    (expenses || []).filter(e => (e.paid_by || 'me') === payer).reduce((s, e) => s + Number(e.amount), 0)
+  const sharedHalf = spentBy('shared') / 2
+  const travelers = hasCompanion
+    ? [
+        { name: t.traveler_name || 'נוסעת א׳', budget: t.total_budget, spent: spentBy('me') + sharedHalf },
+        { name: companionName!, budget: companionBudget, spent: spentBy('companion') + sharedHalf },
+      ]
+    : []
+  const shownBudget = hasCompanion ? t.total_budget + companionBudget : t.total_budget
+  const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 })
   const daysMap = new Map((days || []).map((d: TripDay) => [d.date, d]))
   const totalDays = differenceInDays(parseISO(t.end_date), parseISO(t.start_date)) + 1
 
@@ -47,25 +65,43 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         </div>
 
         {/* Budget (if enabled) */}
-        {t.share_show_budget && t.total_budget > 0 && (
+        {t.share_show_budget && shownBudget > 0 && (
           <div className="bg-white rounded-2xl shadow-sm p-5 mb-5">
             <h2 className="font-semibold text-gray-700 mb-3">💰 תקציב</h2>
             <div className="grid grid-cols-3 gap-3 text-center">
               <div>
-                <div className="font-bold text-gray-800">{t.total_budget.toLocaleString()}</div>
-                <div className="text-xs text-gray-400">כולל</div>
+                <div className="font-bold text-gray-800">{fmt(shownBudget)}</div>
+                <div className="text-xs text-gray-400">{hasCompanion ? 'תקציב משותף' : 'כולל'}</div>
               </div>
               <div>
-                <div className="font-bold text-orange-500">{totalSpent.toLocaleString()}</div>
+                <div className="font-bold text-orange-500">{fmt(totalSpent)}</div>
                 <div className="text-xs text-gray-400">הוצא</div>
               </div>
               <div>
-                <div className={`font-bold ${t.total_budget - totalSpent >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  {(t.total_budget - totalSpent).toLocaleString()}
+                <div className={`font-bold ${shownBudget - totalSpent >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  {fmt(shownBudget - totalSpent)}
                 </div>
                 <div className="text-xs text-gray-400">נשאר ({t.currency})</div>
               </div>
             </div>
+
+            {/* Each traveler against her own budget */}
+            {hasCompanion && (
+              <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-gray-100">
+                {travelers.map((p, i) => {
+                  const left = p.budget - p.spent
+                  return (
+                    <div key={p.name} className={`rounded-xl px-3 py-2 text-xs ${i === 0 ? 'bg-blue-50' : 'bg-purple-50'}`}>
+                      <span className={`font-semibold ${i === 0 ? 'text-blue-700' : 'text-purple-700'}`}>{p.name}</span>
+                      <span className="text-gray-500"> · הוציאה {fmt(p.spent)}</span>
+                      {p.budget > 0 && (
+                        <span className={left >= 0 ? 'text-green-600' : 'text-red-500'}> · נשאר {fmt(left)}</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
