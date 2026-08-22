@@ -129,7 +129,7 @@ export default function BudgetClient({
       const sharedHalf = catExp.filter(e => e.paid_by === 'shared').reduce((s, e) => s + Number(e.amount), 0) / 2
       spent = own + sharedHalf
     }
-    return { ...cat, spent }
+    return { ...cat, spent, expenseCount: catExp.length }
   })
 
   const totalPlanned = categories.reduce((s, c) => s + Number(c[plannedKey] || 0), 0)

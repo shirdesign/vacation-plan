@@ -5,7 +5,7 @@ import { BudgetCategory } from '@/lib/types'
 
 const ICONS = ['💰', '✈️', '🏨', '🍽️', '🎡', '🚌', '🛍️', '🎲', '🆘', '🎁', '☕', '💊', '🎫', '⛽']
 
-type CatWithSpent = BudgetCategory & { spent: number }
+type CatWithSpent = BudgetCategory & { spent: number; expenseCount?: number }
 
 const FLIGHTS_CATEGORY_NAME = 'טיסות פנים'
 
@@ -83,9 +83,19 @@ export default function BudgetPlanner({
     onCategoriesChange(baseCats(categories).map(c => c.id === cat.id ? { ...c, name, icon: editIcon } : c))
   }
 
-  async function deleteCategory(id: string) {
-    await supabase.from('budget_categories').delete().eq('id', id)
-    onCategoriesChange(baseCats(categories).filter(c => c.id !== id))
+  async function deleteCategory(cat: CatWithSpent) {
+    // Deleting a category also strips every expense in it of its category —
+    // they keep counting in the total but vanish from this breakdown, and both
+    // travelers' planned amounts go with it. Never do that on a single tap.
+    const n = cat.expenseCount ?? 0
+    const ok = window.confirm(
+      n > 0
+        ? `מחיקת "${cat.name}" תשאיר ${n} הוצאות בלי קטגוריה — הן ימשיכו להיספר בסה״כ אבל ייעלמו מהפירוט, והסכומים המשוערים של הקטגוריה יימחקו לשתי הנוסעות.\nלמחוק?`
+        : `למחוק את הקטגוריה "${cat.name}"?`,
+    )
+    if (!ok) return
+    await supabase.from('budget_categories').delete().eq('id', cat.id)
+    onCategoriesChange(baseCats(categories).filter(c => c.id !== cat.id))
   }
 
   return (
@@ -144,7 +154,7 @@ export default function BudgetPlanner({
                     </span>
                   )}
                   <button
-                    onClick={() => deleteCategory(cat.id)}
+                    onClick={() => deleteCategory(cat)}
                     className="text-gray-300 hover:text-red-400 text-sm transition"
                     title="מחקי קטגוריה"
                   >✕</button>
